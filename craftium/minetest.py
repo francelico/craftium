@@ -197,7 +197,11 @@ class Minetest():
     def _write_config(self, config: dict[str, Any], path: os.PathLike):
         with open(path, "w") as f:
             for key, value in config.items():
-                f.write(f"{key} = {value}\n")
+                if isinstance(value, dict):
+                    for kkey, vvalue in value.items():
+                        f.write(f"{key}.{kkey} = {vvalue}\n")
+                else:
+                    f.write(f"{key} = {value}\n")
 
     def _create_mt_dirs(
             self,

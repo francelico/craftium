@@ -262,6 +262,7 @@ register(
         max_timesteps=4000,
         init_frames=200,
         minetest_conf=dict(
+            # secure = {"enable_security": True},
             soft_reset=True,
             give_initial_stuff=True,
             initial_stuff="default:sword_steel",  # Provide the player with a sword
