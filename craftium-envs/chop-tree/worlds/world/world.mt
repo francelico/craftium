@@ -8,4 +8,4 @@ gameid = minetest
 world_name = worldA
 server_announce = false
 load_mod_superflat = false
-load_mod_craftium_chop_tree = mods/craftium_mod
+load_mod_craftium_chop_tree = mods/craftium_env

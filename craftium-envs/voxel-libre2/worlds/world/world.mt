@@ -8,4 +8,4 @@ gameid = mineclone2
 world_name = world
 server_announce = false
 load_mod_superflat = false
-load_mod_craftium_mod = mods/craftium_mod
+load_mod_craftium_env = mods/craftium_env

@@ -8,6 +8,6 @@ gameid = minetest
 world_name = world
 server_announce = false
 load_mod_superflat = mods/superflat
-load_mod_craftium_mod = mods/craftium_mod
+load_mod_craftium_env = mods/craftium_env
 load_mod_mobs = mods/mobs
 load_mod_mobs_monster = mods/mobs_monster
