@@ -97,6 +97,7 @@ register(
         max_timesteps=1000,
         init_frames=200,
         soft_reset=True,
+        _voxel_obs_available=True,
     )
 )
 
@@ -121,6 +122,7 @@ register(
         max_timesteps=500,
         init_frames=200,
         soft_reset=True,
+        _voxel_obs_available=True,
     )
 )
 
@@ -148,6 +150,7 @@ register(
             give_initial_stuff=True,
             initial_stuff="default:axe_steel",
         ),
+        _voxel_obs_available=True,
     )
 )
 
@@ -172,6 +175,7 @@ register(
         obs_height=64,
         max_timesteps=500,
         init_frames=200,
+        _voxel_obs_available=True,
     )
 )
 
@@ -200,6 +204,7 @@ register(
             give_initial_stuff=True,
             initial_stuff="default:sword_steel",
         ),
+        _voxel_obs_available=True,
     )
 )
 
@@ -237,6 +242,7 @@ register(
             performance_tradeoffs=True,
             enable_particles=False,
         ),
+        _voxel_obs_available=True,
     )
 )
 
@@ -350,5 +356,6 @@ register(
          ##########
                     """.replace("\n", "\\n"),
         ),
+        _voxel_obs_available=True,
     )
 )

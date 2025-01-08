@@ -204,7 +204,7 @@ void Client::startPyConn()
 
 void Client::pyConnStep() {
     // NOTE: the `actions` array is defined in craftium.h
-    int n_send, n_recv, W, H, obs_rwd_buffer_size;
+    int n_send, n_recv, W, H, Xv, Yv, Zv, obs_rwd_buffer_size;
     u32 c; // stores the RGBA pixel color
     bool kill;
 
@@ -233,6 +233,13 @@ void Client::pyConnStep() {
     } else {
         obs_rwd_buffer_size = W*H + 8 + 1; // grayscale images
     }
+
+	Xv = 2 * g_settings->getU32("voxel_obs_rx") + 1;
+	Yv = 2 * g_settings->getU32("voxel_obs_ry") + 1;
+	Zv = 2 * g_settings->getU32("voxel_obs_rz") + 1;
+	if (g_settings->getBool("voxel_obs")) {
+    	obs_rwd_buffer_size += Xv*Yv*Zv*3*4; // voxel observation
+	}
 
     /* If obs_rwd_buffer is not initialized, allocate memory for it now */
     if (!obs_rwd_buffer) {
@@ -263,6 +270,23 @@ void Client::pyConnStep() {
             }
         }
     }
+
+    if (g_settings->getBool("voxel_obs")) {
+		/* Encode the voxel observation as 3 arrays,
+		VoxelManip:get_data(), VoxelManip:get_light_data(), VoxelManip:get_param2_data() */
+		int j = 0;
+		for (int z=0; z<Zv; z++) {
+			for (int y=0; y<Yv; y++) {
+				for (int x=0; x<Xv; x++) {
+                    memcpy(&obs_rwd_buffer[i], &g_voxel_data[j], sizeof(uint32_t));
+                    memcpy(&obs_rwd_buffer[i+4], &g_voxel_light_data[j], sizeof(uint32_t));
+                    memcpy(&obs_rwd_buffer[i+8], &g_voxel_param2_data[j], sizeof(uint32_t));
+                    i = i + 12; // Advance by 12 bytes (3 * sizeof(uint32_t))
+					j++;
+				}
+			}
+		}
+	}
 
     /* Encode the reward (double) as  8 bytes at the end of the buffer */
     char *rewardBytes = (char*)&g_reward;
@@ -759,7 +783,6 @@ void Client::step(float dtime)
 		Handle environment
 	*/
 	LocalPlayer *player = m_env.getLocalPlayer();
-
         pyConnStep();
 
 	// Step environment (also handles player controls)
@@ -1223,6 +1246,7 @@ void Client::ReceiveAll()
 inline void Client::handleCommand(NetworkPacket* pkt)
 {
 	const ToClientCommandHandler& opHandle = toClientCommandTable[pkt->getCommand()];
+	//	printf("\n TEST client.cpp:handleCommand() opHandle.name = %s", opHandle.name);
 	(this->*opHandle.handler)(pkt);
 }
 
@@ -1232,6 +1256,7 @@ inline void Client::handleCommand(NetworkPacket* pkt)
 void Client::ProcessData(NetworkPacket *pkt)
 {
 	ToClientCommand command = (ToClientCommand) pkt->getCommand();
+	//	printf("\n TEST client.cpp:ProcessData() command = %d", static_cast<unsigned>(command));
 
 	m_packetcounter.add(static_cast<u16>(command));
 	g_profiler->graphAdd("client_received_packets", 1);

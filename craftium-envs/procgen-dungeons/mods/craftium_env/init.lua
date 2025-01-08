@@ -1,3 +1,9 @@
+voxel_radius = {
+	x = minetest.settings:get("voxel_obs_rx"),
+	y = minetest.settings:get("voxel_obs_ry"),
+	z = minetest.settings:get("voxel_obs_rz")
+}
+
 rwd_objective = minetest.settings:get("rwd_objective")
 rwd_kill_monster = minetest.settings:get("rwd_kill_monster")
 
@@ -123,6 +129,12 @@ minetest.register_globalstep(function(dtime)
 	-- Set timeofday to midday
 	minetest.set_timeofday(0.5)
 
+	local player = minetest.get_connected_players()[1]
+	-- if the player is not connected end here
+	if player == nil then
+		return nil
+	end
+
 	-- Reset the environment if requested by the python interface
 	if get_soft_reset() == 1 then
 		-- Remove the objective item if it's already spawned
@@ -142,10 +154,18 @@ minetest.register_globalstep(function(dtime)
 		end
 
 		-- Reset player's health and position
-		local player = minetest.get_connected_players()[1]
 		player:set_hp(20, {type = "set_hp", from = "mod" })
 		player:set_pos(player_pos)
 
 		reset_termination()
+	end
+
+	-- get voxel obs
+	local player_pos = player:get_pos()
+	if minetest.settings:get("voxel_obs") then
+		local voxel_data, voxel_light_data, voxel_param2_data = voxel_api:get_voxel_data(player_pos, voxel_radius)
+		set_voxel_data(voxel_data)
+		set_voxel_light_data(voxel_light_data)
+		set_voxel_param2_data(voxel_param2_data)
 	end
 end)

@@ -23,6 +23,10 @@ class CraftiumEnv(Env):
     :param env_dir: Directory of the environment to load (should contain `worlds` and `games` directories).
     :param obs_width: The width of the observation image in pixels.
     :param obs_height: The height of the observation image in pixels.
+    :param enable_voxel_obs: Whether to enable voxel observations. Can only be enabled if _voxel_obs_available is True. The voxel observation is a 3D grid of dimensions (2*voxel_obs_rx+1, 2*voxel_obs_ry+1, 2*voxel_obs_rz+1, 3). The last dimension contains the voxel node ID, the light data, and the param2 data for each voxel.
+    :param voxel_obs_rx: The radius of the voxel observation in the x-axis (North).
+    :param voxel_obs_ry: The radius of the voxel observation in the y-axis (Up).
+    :param voxel_obs_rz: The radius of the voxel observation in the z-axis (East).
     :param init_frames: The number of frames to wait for Minetest to load.
     :param render_mode: Render mode ("human" or "rgb_array"), see [Env.render](https://gymnasium.farama.org/api/env/#gymnasium.Env.render).
     :param max_timesteps: Maximum number of timesteps until episode termination. Disabled if set to `None`.
@@ -41,14 +45,19 @@ class CraftiumEnv(Env):
     :param seed: Random seed. Affects minetest's map generation and Lua's RNG (in mods).
     :param sync_mode: If set to true, minetest's internal client and server steps are synchronized. This is useful for training models slower than realtime.
     :param soft_reset: If set to true, resets will have to be handled by the Lua mod and minetest won't be killed and rerun every call to restart. **IMPORTANT:** Only set this flag to `True` in environments that support this feature.
+    :param _voxel_obs_available: This flag indicates environments that support voxel observations during registration (do not manually override).
     """
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30, "voxel_observations_enabled": False}
 
     def __init__(
             self,
             env_dir: os.PathLike,
             obs_width: int = 640,
             obs_height: int = 360,
+            enable_voxel_obs: bool = False,
+            voxel_obs_rx: int = 20,
+            voxel_obs_ry: int = 10,
+            voxel_obs_rz: int = 20,
             init_frames: int = 15,
             render_mode: Optional[str] = None,
             max_timesteps: Optional[int] = None,
@@ -69,8 +78,16 @@ class CraftiumEnv(Env):
             fps_max: int = 200,
             pmul: Optional[None] = None,
             soft_reset: bool = False,
+            _voxel_obs_available: bool = False,
     ):
         super(CraftiumEnv, self).__init__()
+
+        if enable_voxel_obs:
+            if _voxel_obs_available:
+                self.metadata["voxel_observations_enabled"] = True
+            else:
+                raise ValueError("Voxel observations are not supported for this environment. Set `enable_voxel_obs` to `False` "
+                                 "or use a different environment.")
 
         self.obs_width = obs_width
         self.obs_height = obs_height
@@ -104,6 +121,10 @@ class CraftiumEnv(Env):
         self.mt_chann = MtChannel(
             img_width=self.obs_width,
             img_height=self.obs_height,
+            voxel_obs=enable_voxel_obs,
+            voxel_obs_rx=voxel_obs_rx,
+            voxel_obs_ry=voxel_obs_ry,
+            voxel_obs_rz=voxel_obs_rz,
             listen_timeout=mt_listen_timeout,
             rgb_imgs=rgb_observations,
         )
@@ -119,6 +140,10 @@ class CraftiumEnv(Env):
             sync_dir=env_dir,
             screen_w=obs_width,
             screen_h=obs_height,
+            voxel_obs=enable_voxel_obs,
+            voxel_obs_rx=voxel_obs_rx,
+            voxel_obs_ry=voxel_obs_ry,
+            voxel_obs_rz=voxel_obs_rz,
             minetest_dir=minetest_dir,
             tcp_port=self.mt_chann.port,
             minetest_conf=minetest_conf,
@@ -182,18 +207,19 @@ class CraftiumEnv(Env):
             # HACK skip some frames to let the game initialize
             # TODO This "waiting" should be implemented in Minetest not in python
             for _ in range(self.init_frames):
-                _observation, _reward, _term = self.mt_chann.receive()
+                _observation, _voxobs, _reward, _term = self.mt_chann.receive()
                 self.mt_chann.send([0]*21, 0, 0)  # nop action
         else:
             self.mt_chann.send_soft_reset()
 
-        observation, _reward, _term = self.mt_chann.receive()
+        observation, voxobs, _reward, _term = self.mt_chann.receive()
         if not self.gray_scale_keepdim and not self.rgb_observations:
             observation = observation[:, :, 0]
 
         self.last_observation = observation
 
         info = self._get_info()
+        info["voxel_obs"] = voxobs
 
         return observation, info
 
@@ -220,13 +246,14 @@ class CraftiumEnv(Env):
         self.mt_chann.send(keys, mouse_x, mouse_y)
 
         # receive the new info from minetest
-        observation, reward, termination = self.mt_chann.receive()
+        observation, voxobs, reward, termination = self.mt_chann.receive()
         if not self.gray_scale_keepdim and not self.rgb_observations:
             observation = observation[:, :, 0]
 
         self.last_observation = observation
 
         info = self._get_info()
+        info["voxel_obs"] = voxobs
 
         truncated = self.max_timesteps is not None and self.timesteps >= self.max_timesteps
 

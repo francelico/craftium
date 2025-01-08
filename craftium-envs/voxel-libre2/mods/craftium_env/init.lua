@@ -1,3 +1,9 @@
+voxel_radius = {
+	x = minetest.settings:get("voxel_obs_rx"),
+	y = minetest.settings:get("voxel_obs_ry"),
+	z = minetest.settings:get("voxel_obs_rz")
+}
+
 -- names of the items included in the initial inventory
 init_tools = { "mcl_tools:axe_stone", "mcl_torches:torch 256" }
 
@@ -37,6 +43,22 @@ minetest.register_globalstep(function(dtime)
 	end
 	minetest.set_timeofday(timeofday)
 	timeofday = timeofday + timeofday_step
+
+	local player = minetest.get_connected_players()[1]
+
+	-- if the player is not connected end here
+	if player == nil then
+		return nil
+	end
+
+	-- if the player is connected:
+	local player_pos = player:get_pos()
+	if minetest.settings:get("voxel_obs") then
+		local voxel_data, voxel_light_data, voxel_param2_data = voxel_api:get_voxel_data(player_pos, voxel_radius)
+		set_voxel_data(voxel_data)
+		set_voxel_light_data(voxel_light_data)
+		set_voxel_param2_data(voxel_param2_data)
+	end
 end)
 
 --

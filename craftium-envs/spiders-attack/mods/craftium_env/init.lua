@@ -1,3 +1,9 @@
+voxel_radius = {
+	x = minetest.settings:get("voxel_obs_rx"),
+	y = minetest.settings:get("voxel_obs_ry"),
+	z = minetest.settings:get("voxel_obs_rz")
+}
+
 -- Set the random seed
 if minetest.settings:has("fixed_map_seed") then
 	math.randomseed(minetest.settings:get("fixed_map_seed"))
@@ -130,6 +136,22 @@ end)
 minetest.register_globalstep(function(dtime)
 	-- Set timeofday to midday
 	minetest.set_timeofday(0.5)
+
+	local player = minetest.get_connected_players()[1]
+
+	-- if the player is not connected end here
+	if player == nil then
+		return nil
+	end
+
+	-- if the player is connected:
+	local player_pos = player:get_pos()
+	if minetest.settings:get("voxel_obs") then
+		local voxel_data, voxel_light_data, voxel_param2_data = voxel_api:get_voxel_data(player_pos, voxel_radius)
+		set_voxel_data(voxel_data)
+		set_voxel_light_data(voxel_light_data)
+		set_voxel_param2_data(voxel_param2_data)
+	end
 end)
 
 minetest.register_on_dieplayer(function(_player, _reason)

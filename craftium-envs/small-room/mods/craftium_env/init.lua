@@ -7,8 +7,14 @@ function rand(lower, greater)
 	return lower + math.random()  * (greater - lower);
 end
 
+DEBUG_PRINT_ON_RESET = true
 SIZE = 10 -- size of the room in blocks
 FLOOR = 4.5
+voxel_radius = {
+	x = minetest.settings:get("voxel_obs_rx"),
+	y = minetest.settings:get("voxel_obs_ry"),
+	z = minetest.settings:get("voxel_obs_rz")
+}
 
 reset_environment = function(player)
 	-- Set the player's initial position
@@ -22,6 +28,10 @@ reset_environment = function(player)
 	-- Spawn a red block inside the room in a random position
 	target_pos = {x = rand(1, SIZE-1), z = rand(5, SIZE-1), y = 5.5 }
 	minetest.set_node(target_pos, { name = "default:coral_orange" })
+	if DEBUG_PRINT_ON_RESET then
+		voxel_api:print_3d_vector(player:get_pos(), "Player initial pos")
+		voxel_api:print_3d_vector(target_pos, "Target pos")
+	end
 end
 
 -- Executed when the player joins the game
@@ -58,6 +68,12 @@ minetest.register_globalstep(function(dtime)
 	-- get the position of the player and compute its
 	-- distance to he target
 	local player_pos = player:get_pos()
+	if minetest.settings:get("voxel_obs") then
+		local voxel_data, voxel_light_data, voxel_param2_data = voxel_api:get_voxel_data(player_pos, voxel_radius)
+		set_voxel_data(voxel_data)
+		set_voxel_light_data(voxel_light_data)
+		set_voxel_param2_data(voxel_param2_data)
+	end
 
 	local distance = math.pow(target_pos.x-player_pos.x, 2) +
 		math.pow(target_pos.z-player_pos.z, 2)
@@ -70,4 +86,6 @@ minetest.register_globalstep(function(dtime)
 	if distance < 3.0 then
 		set_termination()
 	end
+
 end)
+

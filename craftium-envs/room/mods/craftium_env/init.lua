@@ -7,6 +7,12 @@ function rand(lower, greater)
 	return lower + math.random()  * (greater - lower);
 end
 
+voxel_radius = {
+	x = minetest.settings:get("voxel_obs_rx"),
+	y = minetest.settings:get("voxel_obs_ry"),
+	z = minetest.settings:get("voxel_obs_rz")
+}
+
 reset_environment = function()
 	local player = minetest.get_connected_players()[1]
 	-- Room environment:
@@ -68,6 +74,12 @@ minetest.register_globalstep(function(dtime)
 	-- get the position of the player and compute its
 	-- distance to he target
 	local player_pos = player:get_pos()
+	if minetest.settings:get("voxel_obs") then
+		local voxel_data, voxel_light_data, voxel_param2_data = voxel_api:get_voxel_data(player_pos, voxel_radius)
+		set_voxel_data(voxel_data)
+		set_voxel_light_data(voxel_light_data)
+		set_voxel_param2_data(voxel_param2_data)
+	end
 
 	local distance = math.pow(target_pos.x-player_pos.x, 2) +
 		math.pow(target_pos.z-player_pos.z, 2)
