@@ -183,6 +183,7 @@ int read_large_from_socket(int socket_fd, char *buffer, int total_size) {
 static PyObject* server_recv(PyObject* self, PyObject* args) {
   int connfd, n_bytes, obs_width, obs_height, n_read, n_channels, n_vox_channels, voxel_x, voxel_y, voxel_z;
   double reward;
+  int32_t yaw, pitch;
   char *buff;
 
   if (!PyArg_ParseTuple(args, "iiiiiiiii", &connfd, &n_bytes, &obs_width, &obs_height, &n_channels, &n_vox_channels, &voxel_x, &voxel_y, &voxel_z)) {
@@ -218,6 +219,19 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
   memcpy(&reward, &buff[n_bytes-9], sizeof(reward));
   PyObject* py_reward = PyFloat_FromDouble(reward);
 
+  // Retrieve backwards the yaw [4], pitch [4], velocity [12] and position [12] = 32 bytes
+  float* array_pos_data = (float*)malloc(3 * sizeof(float));
+  float* array_vel_data = (float*)malloc(3 * sizeof(float));
+  memcpy(&yaw, &buff[n_bytes-13], sizeof(int32_t));
+  memcpy(&pitch, &buff[n_bytes-17], sizeof(int32_t));
+  memcpy(array_vel_data, &buff[n_bytes-29], 3 * sizeof(float));
+  memcpy(array_pos_data, &buff[n_bytes-41], 3 * sizeof(float));
+  npy_intp dims_v3f[1] = {3};
+  PyObject* pyarray_pos = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_pos_data);
+  PyObject* pyarray_vel = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_vel_data);
+  PyObject* py_pitch = PyLong_FromSsize_t(pitch);
+  PyObject* py_yaw = PyLong_FromSsize_t(yaw);
+
   // Create separate memory allocations for the RGB and voxel data
   char* array_rgb_data = (char*)malloc(obs_height * obs_width * n_channels);
   uint32_t* array_vox_data = (uint32_t*)malloc(voxel_x * voxel_y * voxel_z * n_vox_channels * sizeof(uint32_t));
@@ -226,8 +240,14 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
     free(buff);
     free(array_rgb_data);
     free(array_vox_data);
+    free(array_pos_data);
+    free(array_vel_data);
     Py_XDECREF(py_termination);
     Py_XDECREF(py_reward);
+    Py_XDECREF(pyarray_pos);
+    Py_XDECREF(pyarray_vel);
+    Py_XDECREF(py_pitch);
+    Py_XDECREF(py_yaw);
     PyErr_SetString(PyExc_Exception, "Failed to allocate memory for array data");
     return NULL;
   }
@@ -243,38 +263,43 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
 
   // Create the numpy arrays with their own separate memory
   npy_intp dims[3] = {obs_height, obs_width, n_channels};
-  PyObject* array_rgb = PyArray_SimpleNewFromData(3, dims, NPY_UINT8, array_rgb_data);
+  PyObject* pyarray_rgb = PyArray_SimpleNewFromData(3, dims, NPY_UINT8, array_rgb_data);
 
   npy_intp dims_vox[4] = {voxel_z, voxel_y, voxel_x, n_vox_channels};
-  PyObject* array_vox = PyArray_SimpleNewFromData(4, dims_vox, NPY_UINT32, array_vox_data);
+  PyObject* pyarray_vox = PyArray_SimpleNewFromData(4, dims_vox, NPY_UINT32, array_vox_data);
 
-  if (!array_rgb || !array_vox) {
+  if (!pyarray_rgb || !pyarray_vox) {
     free(array_rgb_data);
     free(array_vox_data);
-    Py_XDECREF(array_rgb);
-    Py_XDECREF(array_vox);
+    Py_XDECREF(pyarray_rgb);
+    Py_XDECREF(pyarray_vox);
     Py_XDECREF(py_termination);
     Py_XDECREF(py_reward);
+    Py_XDECREF(pyarray_pos);
+    Py_XDECREF(pyarray_vel);
+    Py_XDECREF(py_pitch);
+    Py_XDECREF(py_yaw);
     PyErr_SetString(PyExc_RuntimeError, "Failed to create NumPy array");
     return NULL;
   }
 
   // Now it's safe to enable OWNDATA as each array has its own allocation
-  PyArray_ENABLEFLAGS((PyArrayObject*)array_rgb, NPY_ARRAY_OWNDATA);
-  PyArray_ENABLEFLAGS((PyArrayObject*)array_vox, NPY_ARRAY_OWNDATA);
+  PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_pos, NPY_ARRAY_OWNDATA);
+  PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_vel, NPY_ARRAY_OWNDATA);
+  PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_rgb, NPY_ARRAY_OWNDATA);
+  PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_vox, NPY_ARRAY_OWNDATA);
 
-  PyObject* tuple = PyTuple_Pack(4, array_rgb, array_vox, py_reward, py_termination);
-
-//  printf("TEST mt_server.c server_recv. ARRAY RGB: \n");
-//  print_array(array_rgb);
-//  printf("TEST mt_server.c server_recv. ARRAY VOX: \n");
-//  print_array(array_vox);
+  PyObject* tuple = PyTuple_Pack(8, pyarray_rgb, pyarray_vox, pyarray_pos, pyarray_vel, py_pitch, py_yaw, py_reward, py_termination);
 
   // Safe to DECREF everything as tuple has increased their reference counts
-  Py_DECREF(array_rgb);
-  Py_DECREF(array_vox);
   Py_DECREF(py_reward);
   Py_DECREF(py_termination);
+  Py_DECREF(pyarray_pos);
+  Py_DECREF(pyarray_vel);
+  Py_DECREF(py_pitch);
+  Py_DECREF(py_yaw);
+  Py_DECREF(pyarray_rgb);
+  Py_DECREF(pyarray_vox);
 
   return tuple;
 }

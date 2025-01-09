@@ -202,7 +202,7 @@ void Client::startPyConn()
     printf("\n[INFO] PyConn started in port %d\n\n", py_port);
 }
 
-void Client::pyConnStep() {
+void Client::pyConnStep(LocalPlayer *myplayer) {
     // NOTE: the `actions` array is defined in craftium.h
     int n_send, n_recv, W, H, Xv, Yv, Zv, obs_rwd_buffer_size;
     u32 c; // stores the RGBA pixel color
@@ -229,9 +229,9 @@ void Client::pyConnStep() {
       and +1 for the episode termination flag
     */
     if (g_settings->getBool("rgb_frames")) {
-        obs_rwd_buffer_size = W*H*3 + 8 + 1; // full RGB images
+        obs_rwd_buffer_size = W*H*3 + 32 + 8 + 1; // full RGB images
     } else {
-        obs_rwd_buffer_size = W*H + 8 + 1; // grayscale images
+        obs_rwd_buffer_size = W*H + 32 + 8 + 1; // grayscale images
     }
 
 	Xv = 2 * g_settings->getU32("voxel_obs_rx") + 1;
@@ -287,6 +287,21 @@ void Client::pyConnStep() {
 			}
 		}
 	}
+
+	// Encode the player position (3 floats), velocity (3 floats), pitch (1 u32), yaw (1 u32)
+	v3f pf           = myplayer->getPosition() * 100;
+	v3f sf           = myplayer->getSpeed() * 100;
+	s32 pitch        = myplayer->getPitch() * 100;
+	s32 yaw          = myplayer->getYaw() * 100;
+	memcpy(&obs_rwd_buffer[i], &pf.X, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+4], &pf.Y, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+8], &pf.Z, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+12], &sf.X, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+16], &sf.Y, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+20], &sf.Z, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+24], &pitch, sizeof(s32));
+	memcpy(&obs_rwd_buffer[i+28], &yaw, sizeof(s32));
+	i = i + 32;
 
     /* Encode the reward (double) as  8 bytes at the end of the buffer */
     char *rewardBytes = (char*)&g_reward;
@@ -783,7 +798,7 @@ void Client::step(float dtime)
 		Handle environment
 	*/
 	LocalPlayer *player = m_env.getLocalPlayer();
-        pyConnStep();
+        pyConnStep(player);
 
 	// Step environment (also handles player controls)
 	m_env.step(dtime);

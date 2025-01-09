@@ -207,12 +207,12 @@ class CraftiumEnv(Env):
             # HACK skip some frames to let the game initialize
             # TODO This "waiting" should be implemented in Minetest not in python
             for _ in range(self.init_frames):
-                _observation, _voxobs, _reward, _term = self.mt_chann.receive()
+                _observation, _voxobs, _pos, _vel, _pitch, _yaw, _reward, _term = self.mt_chann.receive()
                 self.mt_chann.send([0]*21, 0, 0)  # nop action
         else:
             self.mt_chann.send_soft_reset()
 
-        observation, voxobs, _reward, _term = self.mt_chann.receive()
+        observation, voxobs, pos, vel, pitch, yaw, _reward, _term = self.mt_chann.receive()
         if not self.gray_scale_keepdim and not self.rgb_observations:
             observation = observation[:, :, 0]
 
@@ -220,6 +220,10 @@ class CraftiumEnv(Env):
 
         info = self._get_info()
         info["voxel_obs"] = voxobs
+        info["player_pos"] = pos
+        info["player_vel"] = vel
+        info["player_pitch"] = pitch
+        info["player_yaw"] = yaw
 
         return observation, info
 
@@ -246,7 +250,7 @@ class CraftiumEnv(Env):
         self.mt_chann.send(keys, mouse_x, mouse_y)
 
         # receive the new info from minetest
-        observation, voxobs, reward, termination = self.mt_chann.receive()
+        observation, voxobs, pos, vel, pitch, yaw, reward, termination = self.mt_chann.receive()
         if not self.gray_scale_keepdim and not self.rgb_observations:
             observation = observation[:, :, 0]
 
@@ -254,6 +258,10 @@ class CraftiumEnv(Env):
 
         info = self._get_info()
         info["voxel_obs"] = voxobs
+        info["player_pos"] = pos
+        info["player_vel"] = vel
+        info["player_pitch"] = pitch
+        info["player_yaw"] = yaw
 
         truncated = self.max_timesteps is not None and self.timesteps >= self.max_timesteps
 
