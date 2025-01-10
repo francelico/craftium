@@ -1,0 +1,12 @@
+enable_damage = true
+creative_mode = false
+mod_storage_backend = sqlite3
+auth_backend = sqlite3
+player_backend = sqlite3
+backend = sqlite3
+gameid = mineclone2
+world_name = world
+server_announce = false
+load_mod_superflat = false
+load_mod_craftium_env = mods/craftium_env
+load_mod_voxel_api = mods/voxel_api
