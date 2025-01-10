@@ -2,7 +2,7 @@ voxel_api = {}
 
 -- Internal use only
 
-DEBUG = true
+DEBUG = false
 DEBUG_PRINT_ONCE = DEBUG
 
 local function print_array_from_pos(array, minp, maxp, vox_area)

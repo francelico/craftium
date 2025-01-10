@@ -24,8 +24,8 @@ NODEID_TO_RGB = {
     118: (255, 128, 0), # coral (goal), orange
     122: (0, 0, 255), # default:river_water_source, blue
     123: (0, 0, 255), # default:river_water_flowing, blue
-    126: None, # air, NOCOLOR
-    127: None, # IGNORE, NOCOLOR
+    126: 'hide', # air, NOCOLOR
+    127: 'hide', # IGNORE, NOCOLOR
     144: (102, 255, 255), # default:glass, cyan
     161: (255, 255, 0), # default:torch_wall, yellow
     190: (160, 160, 160), # default:stair_cobble, grey
@@ -97,26 +97,30 @@ def set_axes_equal(ax):
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
 
-def plot_voxels(voxels, size=80, alpha=0.4):
+def plot_voxels(voxels, size=80, alpha=0.4, unknown_node_color=(255, 51, 153)):
     # Get coordinates and node IDs of all non-air voxels
     xs, ys, zs = [], [], []
     colors = []
     nodes_in_view = {}
+    unknown_node_ids = []
     # Iterate through all points
     for x, y, z in np.ndindex(voxels.shape):
         node_id = voxels[x, y, z]
-        if not node_id in NODEID_TO_RGB:
-            print("Warning: Unknown node ID ", node_id)
+        if NODEID_TO_RGB.get(node_id) == 'hide':
             continue
-        # Only include points that have a color defined
-        if NODEID_TO_RGB.get(node_id) is not None:
-            xs.append(x)
-            ys.append(y)
-            zs.append(z)
-            # Convert RGB tuple to matplotlib format (0-1 range)
-            rgb = tuple(val / 255 for val in NODEID_TO_RGB[node_id])
-            colors.append(rgb)
+        xs.append(x)
+        ys.append(y)
+        zs.append(z)
+        if not node_id in NODEID_TO_RGB:
+            col = unknown_node_color
+            unknown_node_ids.append(node_id)
+        else:
+            col = NODEID_TO_RGB[node_id]
             nodes_in_view[node_id] = NODEID_TO_RGB[node_id]
+        rgb = tuple(val / 255 for val in col)
+        colors.append(rgb)
+
+    print(f"Unknown node IDs: ", [int(n) for n in set(unknown_node_ids)])
 
     fig = plt.figure(figsize=(12, 7))
     ax = fig.add_subplot(projection='3d')
@@ -128,6 +132,7 @@ def plot_voxels(voxels, size=80, alpha=0.4):
     ax.set_zlabel('Z')
 
     # Add legend with colors
+    nodes_in_view['unknown'] = unknown_node_color
     legend_elements = [plt.Line2D([0], [0], marker='o', color='w',
                                   label=f'Node {node_id}',
                                   markerfacecolor=tuple(val / 255 for val in rgb),
