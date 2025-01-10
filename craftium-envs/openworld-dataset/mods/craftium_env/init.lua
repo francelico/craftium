@@ -1,3 +1,12 @@
+if minetest.settings:has("fixed_map_seed") then
+	math.randomseed(minetest.settings:get("fixed_map_seed"))
+	minetest.set_mapgen_setting("seed", minetest.settings:get("fixed_map_seed"), true)
+	minetest.log("action", "Overriding World seed = " .. minetest.get_mapgen_setting("seed"))
+end
+
+YAW = 0
+YAW_STEP = 45
+
 voxel_radius = {
 	x = minetest.settings:get("voxel_obs_rx"),
 	y = minetest.settings:get("voxel_obs_ry"),
@@ -7,19 +16,11 @@ voxel_radius = {
 -- names of the items included in the initial inventory
 init_tools = { "mcl_tools:axe_stone", "mcl_torches:torch 256" }
 
-timeofday_step = 1 / 5000 -- day/night cycle lasts 5000 steps
-timeofday = 0.5 -- start episode at midday
+timeofday = 0.5 -- start episode at midday todo: randomize [0,1]
 
 -- executed when the player joins the game
 minetest.register_on_joinplayer(function(player, _last_login)
 	minetest.set_timeofday(timeofday)
-
-	-- disable HUD elements
-	player:hud_set_flags({
-		crosshair = false,
-		basic_debug = false,
-		chat = false,
-	})
 
 	-- setup initial inventory
 	local inv = player:get_inventory()
@@ -27,8 +28,6 @@ minetest.register_on_joinplayer(function(player, _last_login)
 		inv:add_item("main", init_tools[i])
 	end
 
-	-- set player's initial position
-	player:set_pos({x = 120, z = 92, y = 16.5 })
 end)
 
 -- turn on the termination flag if the agent dies
@@ -38,11 +37,7 @@ end)
 
 -- make game's time match with learning timesteps
 minetest.register_globalstep(function(dtime)
-	if timeofday > 1.0 then
-		timeofday = 0.0
-	end
 	minetest.set_timeofday(timeofday)
-	timeofday = timeofday + timeofday_step
 
 	local player = minetest.get_connected_players()[1]
 
@@ -50,6 +45,35 @@ minetest.register_globalstep(function(dtime)
 	if player == nil then
 		return nil
 	end
+
+	-- disable HUD elements todo: make this a function
+	player:hud_set_flags({
+		crosshair = false,
+		basic_debug = false,
+		chat = false,
+		wielditem = false,
+		hotbar = false,
+		healthbar = false,
+		breathbar = false,
+	})
+	if hb then
+		hb.hide_hudbar(player, "health")
+		hb.hide_hudbar(player, "breath")
+		hb.hide_hudbar(player, "armor")
+		hb.hide_hudbar(player, "hunger")
+		hb.hide_hudbar(player, "exhaustion")
+		hb.hide_hudbar(player, "saturation")
+		hb.hide_hudbar(player, "progress_bar")
+		hb.hide_hudbar(player, "absorption")
+	end
+	if mcl_experience then
+		mcl_experience.remove_hud(player)
+	end
+
+	-- set the player's view to the next yaw
+	player:set_look_vertical(math.rad(0))
+	player:set_look_horizontal(math.rad(YAW))
+	YAW = (YAW + YAW_STEP) % 360
 
 	-- if the player is connected:
 	local player_pos = player:get_pos()
