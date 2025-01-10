@@ -45,6 +45,7 @@ class CraftiumEnv(Env):
     :param seed: Random seed. Affects minetest's map generation and Lua's RNG (in mods).
     :param sync_mode: If set to true, minetest's internal client and server steps are synchronized. This is useful for training models slower than realtime.
     :param soft_reset: If set to true, resets will have to be handled by the Lua mod and minetest won't be killed and rerun every call to restart. **IMPORTANT:** Only set this flag to `True` in environments that support this feature.
+    :param _minetest_conf: The default minetest configuration provided during environment registration.
     :param _voxel_obs_available: This flag indicates environments that support voxel observations during registration (do not manually override).
     """
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30, "voxel_observations_enabled": False}
@@ -78,6 +79,7 @@ class CraftiumEnv(Env):
             fps_max: int = 200,
             pmul: Optional[None] = None,
             soft_reset: bool = False,
+            _minetest_conf: dict[str, Any] = dict(),
             _voxel_obs_available: bool = False,
     ):
         super(CraftiumEnv, self).__init__()
@@ -89,6 +91,7 @@ class CraftiumEnv(Env):
                 raise ValueError("Voxel observations are not supported for this environment. Set `enable_voxel_obs` to `False` "
                                  "or use a different environment.")
 
+        _minetest_conf.update(minetest_conf)
         self.obs_width = obs_width
         self.obs_height = obs_height
         self.init_frames = init_frames // frameskip
@@ -146,7 +149,7 @@ class CraftiumEnv(Env):
             voxel_obs_rz=voxel_obs_rz,
             minetest_dir=minetest_dir,
             tcp_port=self.mt_chann.port,
-            minetest_conf=minetest_conf,
+            minetest_conf=_minetest_conf,
             pipe_proc=pipe_proc,
             mt_port=mt_port,
             frameskip=frameskip,

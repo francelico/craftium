@@ -146,7 +146,7 @@ register(
         obs_height=64,
         max_timesteps=2000,
         init_frames=200,
-        minetest_conf=dict(
+        _minetest_conf=dict(
             give_initial_stuff=True,
             initial_stuff="default:axe_steel",
         ),
@@ -200,7 +200,7 @@ register(
         obs_height=64,
         max_timesteps=4000,
         init_frames=200,
-        minetest_conf=dict(
+        _minetest_conf=dict(
             give_initial_stuff=True,
             initial_stuff="default:sword_steel",
         ),
@@ -231,7 +231,7 @@ register(
         max_timesteps=10_000,
         init_frames=200,
         game_id="mineclone2",
-        minetest_conf=dict(
+        _minetest_conf=dict(
             max_block_generate_distance=3, # 16x3 blocks
             mcl_logging_mobs_spawn=True,
             hud_scaling=0.5,
@@ -267,7 +267,7 @@ register(
         obs_height=64,
         max_timesteps=4000,
         init_frames=200,
-        minetest_conf=dict(
+        _minetest_conf=dict(
             # secure = {"enable_security": True},
             soft_reset=True,
             give_initial_stuff=True,

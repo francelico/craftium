@@ -11,7 +11,7 @@ from util.util import plot_voxels, plot_rgb
 
 @dataclass
 class Args:
-    env_id: str = "SmallRoomVox-v0"
+    env_id: str = "OpenWorld-v0"
     seed: int = 0
     model: str = "models/3x.model"
     "path to the model skeleton (not used)"
@@ -33,6 +33,8 @@ class Args:
     "y radius of the voxel observation"
     voxel_obs_rz: int = 12
     "z radius of the voxel observation"
+    fov: int = 90
+    "vertical field of view of the agent in degrees"
     init_frames: int = 200
     "number of frames to wait before starting the episode"
 
@@ -46,12 +48,13 @@ def main(args):
                    voxel_obs_ry=args.voxel_obs_ry,
                    voxel_obs_rz=args.voxel_obs_rz,
                    init_frames=args.init_frames,
+                   minetest_conf={"fov": args.fov},
                    )
 
     recorded_frames = []
     for t in range(args.num_frames):
         if t % args.ep_timesteps == 0:
-            observation, info = env.reset(seed=args.seed+t)
+            observation, info = env.reset()
         if args.plot_voxel_obs and np.size(info['voxel_obs'])>0:
             plot_rgb(observation)
             voxels = np.transpose(info["voxel_obs"], (0,2,1,3)) # to go from NUE to ENU [todo: make a wrapper]
@@ -59,7 +62,7 @@ def main(args):
             args.plot_voxel_obs = False
         if args.record_video:
             recorded_frames.append(observation)
-        action = env.action_space.sample()  # get a random action
+        action = 0 # NO-OP (can also do env.action_space.sample() for a random action)
         observation, reward, terminated, truncated, _info = env.step(action)
 
         # if terminated or truncated: # Note: this is absolutely necessary, lua script does not reset the player.
