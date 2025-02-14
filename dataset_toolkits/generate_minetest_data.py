@@ -15,6 +15,7 @@ from xvfbwrapper import Xvfb
 from dataset_toolkits.util import seed_everything
 from craftium.wrappers import NueToEnuVoxelObs, enu_to_nue
 
+EMPTY_SPACE_NODE_IDS = [126, 127]
 
 @dataclass
 class Args:
@@ -39,7 +40,7 @@ class Args:
     "y radius of the voxel observation"
     voxel_obs_rz: int = 32
     "z radius of the voxel observation"
-    resolution: int = 32
+    resolution: int = 518
     "resolution of the generated RGB observations"
     fov: int = 90
     "field of view of the generated RGB observations in degrees"
@@ -89,7 +90,7 @@ def set_trellis_input_voxel_info(dataset_params, args):
     crop_left = (mt_vox_shape - output_vox_grid) // 2
     crop_right = crop_left + output_vox_grid
     dataset_params["trellis_input_voxel_info"]["active_voxel_preprocessing"] = {
-        "empty_space_node_ids": [],
+        "empty_space_node_ids": EMPTY_SPACE_NODE_IDS,
         "crop": {"left": crop_left.tolist(), "right": crop_right.tolist()},
         "pad": False,
         "scale": False,
@@ -207,6 +208,7 @@ def main(args):
             "origin": "agent",
             "origin_idx": None,
             "active_voxel_preprocessing": None,
+            "extrinsics_key": "extrinsics_local",
         }
 
     }
@@ -302,10 +304,10 @@ def main(args):
     #             - seed_folder (one per level)
     #                 - level_metadata.json
     #                 - data.npz
-    if not os.path.exists(os.path.join(dataset_root, "raw", args.dataset_name)):
-        os.makedirs(os.path.join(dataset_root, "raw", args.dataset_name))
+    if not os.path.exists(os.path.join(dataset_root, "raw", args.env_id)):
+        os.makedirs(os.path.join(dataset_root, "raw", args.env_id))
     for s in level_meta:
-        level_folder = os.path.join(dataset_root, "raw", args.dataset_name, str(s))
+        level_folder = os.path.join(dataset_root, "raw", args.env_id, str(s))
         os.makedirs(level_folder, exist_ok=True)
         with open(os.path.join(level_folder, "level_metadata.json"), "w") as f:
             json.dump(level_meta[s], f, indent=4)
