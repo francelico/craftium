@@ -130,6 +130,7 @@ class Minetest():
             config["fixed_map_seed"] = seed
 
         self._write_config(config, os.path.join(self.run_dir, "minetest.conf"))
+        self.config = config
 
         # get the craftium's root directory, the place where all the data
         # needed by craftium's is located
@@ -201,6 +202,11 @@ class Minetest():
         # delete the run's directory
         if os.path.exists(self.run_dir):
             shutil.rmtree(self.run_dir)
+
+    def overwrite_config(self, new_partial_config: dict[str, Any]):
+        for key, value in new_partial_config.items():
+            self.config[key] = value
+        self._write_config(self.config, os.path.join(self.run_dir, "minetest.conf"))
 
     def _write_config(self, config: dict[str, Any], path: os.PathLike):
         with open(path, "w") as f:
@@ -336,6 +342,7 @@ class MTServerOnly():
             config["fixed_map_seed"] = seed
 
         self._write_config(config, os.path.join(self.run_dir, "minetest.conf"))
+        self.config = config
 
         # get the craftium's root directory, the place where all the data
         # needed by craftium's is located
@@ -405,6 +412,11 @@ class MTServerOnly():
         # delete the run's directory
         if os.path.exists(self.run_dir):
             shutil.rmtree(self.run_dir)
+
+    def overwrite_config(self, new_partial_config: dict[str, Any]):
+        for key, value in new_partial_config.items():
+            self.config[key] = value
+        self._write_config(self.config, os.path.join(self.run_dir, "minetest.conf"))
 
     def _write_config(self, config: dict[str, Any], path: os.PathLike):
         with open(path, "w") as f:
@@ -553,6 +565,7 @@ class MTClientOnly():
             config["fixed_map_seed"] = seed
 
         self._write_config(config, os.path.join(self.run_dir, "minetest.conf"))
+        self.config = config
 
         # get the craftium's root directory, the place where all the data
         # needed by craftium's is located

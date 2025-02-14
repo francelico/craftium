@@ -188,6 +188,9 @@ class CraftiumEnv(Env):
                 self.mt.close_pipes()
                 self.mt.wait_close()
 
+            if seed is not None:
+                self.mt.overwrite_config({"fixed_map_seed": seed})
+
             # start the new MT process
             self.mt.start_process()
 

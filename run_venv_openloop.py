@@ -7,8 +7,7 @@ import gymnasium as gym
 from dataclasses import dataclass
 from typing import Optional
 
-import craftium
-from util.util import plot_voxels, plot_rgb
+from dataset_toolkits.util import plot_voxels, plot_rgb
 
 @dataclass
 class Args:
@@ -99,7 +98,7 @@ def main(args):
             observations, infos = envs.reset()
         if args.plot_voxel_obs and np.size(infos['voxel_obs'][0])>0:
             plot_rgb(observations[0])
-            voxels = np.transpose(infos["voxel_obs"][0], (0,2,1,3)) # to go from NUE to ENU [todo: make a wrapper]
+            voxels = np.transpose(infos["voxel_obs"][0], (0,2,1,3)) # to go from NUE to ENU
             plot_voxels(voxels[...,0])
             args.plot_voxel_obs = False
         if args.record_video:
