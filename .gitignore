@@ -150,3 +150,6 @@ videos/
 
 ## Misc
 util/list_sdl_video_drivers
+
+## Datasets
+datasets/
