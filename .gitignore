@@ -133,7 +133,7 @@ lib/irrlichtmt
 client/mod_storage.sqlite
 
 ## Craftium
-__pycache__
+__pycache__/
 craftium.egg-info
 craftium/craftium-envs
 craftium/bin/
