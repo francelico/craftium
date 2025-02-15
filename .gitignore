@@ -153,3 +153,6 @@ util/list_sdl_video_drivers
 
 ## Datasets
 datasets/
+
+## Model weights and checkpoints
+weights/
