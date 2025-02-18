@@ -4,9 +4,6 @@ if minetest.settings:has("fixed_map_seed") then
 	minetest.log("action", "Overriding World seed = " .. minetest.get_mapgen_setting("seed"))
 end
 
-YAW = 0
-YAW_STEP = 45
-
 voxel_radius = {
 	x = minetest.settings:get("voxel_obs_rx"),
 	y = minetest.settings:get("voxel_obs_ry"),
@@ -71,9 +68,10 @@ minetest.register_globalstep(function(dtime)
 	end
 
 	-- set the player's view to the next yaw
-	player:set_look_vertical(math.rad(0))
+	local YAW = math.random(0, 360)
+	local PITCH = math.random(-20, 20)
+	player:set_look_vertical(math.rad(PITCH))
 	player:set_look_horizontal(math.rad(YAW))
-	YAW = (YAW + YAW_STEP) % 360
 
 	-- if the player is connected:
 	local player_pos = player:get_pos()
