@@ -53,7 +53,7 @@ def diffuse_and_decode_from_rgb_obs_cond(metadata):
             output_paths.append(out_p)
 
     # extract features
-    load_queue = Queue(maxsize=4)
+    load_queue = Queue()
     # try:
     with ThreadPoolExecutor(max_workers=8) as loader_executor:
         def loader(local_path, sha256):
@@ -109,9 +109,12 @@ def _diffuse_and_decode_from_rgb_obs_cond(
         mode=multiimage_algo,
     )
     video = render_utils.render_video(outputs['gaussian'][0], num_frames=120)['color']
-    video_geo = render_utils.render_video(outputs['mesh'][0], num_frames=120)['normal']
-    video = [np.concatenate([video[i], video_geo[i]], axis=1) for i in range(len(video))]
+    if 'mesh' in outputs:
+        video_geo = render_utils.render_video(outputs['mesh'][0], num_frames=120)['normal']
+        video = [np.concatenate([video[i], video_geo[i]], axis=1) for i in range(len(video))]
     video_path = os.path.join(args.output_dir, 'assets', sha256, 'diff_decoded_gs_and_mesh.mp4')
+    if not os.path.exists(os.path.dirname(video_path)):
+        os.makedirs(os.path.dirname(video_path))
     imageio.mimsave(video_path, video, fps=15)
     diff_params = {
         "seed": seed,
@@ -141,7 +144,7 @@ def decode_from_latent(metadata):
             output_paths.append(out_p)
 
     # extract features
-    load_queue = Queue(maxsize=4)
+    load_queue = Queue()
     # try:
     with ThreadPoolExecutor(max_workers=8) as loader_executor:
         def loader(sha256):
@@ -173,6 +176,8 @@ def _decode_from_latent(
     )
     video = render_utils.render_video(outputs['gaussian'][0], num_frames=120)['color']
     video_path = os.path.join(args.output_dir, 'assets', sha256, 'latent_decoded_gs.mp4')
+    if not os.path.exists(os.path.dirname(video_path)):
+        os.makedirs(os.path.dirname(video_path))
     imageio.mimsave(video_path, video, fps=15)
     return outputs
 
