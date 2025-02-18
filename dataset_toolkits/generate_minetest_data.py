@@ -129,6 +129,19 @@ def compute_intrisincs_extrinsics(level_data, level_meta, dataset_params):
         level_data[s]["extrinsics_local"] = extrinsics_local[i].cpu().numpy()
         level_data[s]["extrinsics_global"] = extrinsics_global[i].cpu().numpy()
 
+def yaw_pitch_cam_pos_to_extrinsics2(yaws, pitchs, poses):
+    yaws = torch.deg2rad(yaws).cuda()
+    pitchs = torch.deg2rad(pitchs).cuda()
+    look_at_poses = -torch.stack([
+        torch.sin(yaws) * torch.cos(pitchs),
+        torch.cos(yaws) * torch.cos(pitchs),
+        torch.sin(pitchs),
+    ], -1).cuda()
+    look_at_poses += poses.cuda()
+    ups = torch.tile(torch.tensor([0, 0, 1], dtype=torch.float32).cuda(), poses.shape[:-1] + (1,))
+    extrinsics = utils3d.torch.extrinsics_look_at(poses, look_at_poses, ups)
+    return extrinsics
+
 def yaw_pitch_cam_pos_to_extrinsics(yaws, pitchs, poses):
     yaws = torch.deg2rad(yaws)
     pitchs = torch.deg2rad(pitchs)
