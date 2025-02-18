@@ -212,7 +212,10 @@ class TrellisImageTo3DPipeline(Pipeline):
         """
         ret = {}
         if 'mesh' in formats:
-            ret['mesh'] = self.models['slat_decoder_mesh'](slat)
+            try:
+                ret['mesh'] = self.models['slat_decoder_mesh'](slat)
+            except Exception as e:
+                print(f"Failed to decode mesh: {e}")
         if 'gaussian' in formats:
             ret['gaussian'] = self.models['slat_decoder_gs'](slat)
         if 'radiance_field' in formats:
