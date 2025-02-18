@@ -45,7 +45,7 @@ class Minetest():
 
         # create a dedicated directory for this run
         if run_dir is None:
-            self.run_dir = f"./minetest-run-{uuid4()}"
+            self.run_dir = f"minetest-run-{uuid4()}"
             if run_dir_prefix is not None:
                 self.run_dir = os.path.join(run_dir_prefix, self.run_dir)
         else:
@@ -53,7 +53,7 @@ class Minetest():
         # delete the directory if it already exists
         if os.path.exists(self.run_dir):
             shutil.rmtree(self.run_dir)
-        os.mkdir(self.run_dir)
+        os.makedirs(self.run_dir)
 
         print(f"==> Creating Minetest run directory: {self.run_dir}")
 
@@ -272,7 +272,7 @@ class MTServerOnly():
         self.pipe_proc = pipe_proc
 
         # create a dedicated directory for this run
-        self.run_dir = f"./minetest-srv--{uuid4()}"
+        self.run_dir = f"minetest-srv--{uuid4()}"
         if run_dir_prefix is not None:
             self.run_dir = os.path.join(run_dir_prefix, self.run_dir)
         # delete the directory if it already exists
