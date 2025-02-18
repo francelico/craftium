@@ -1,0 +1,13 @@
+enable_damage = false
+creative_mode = true
+mod_storage_backend = sqlite3
+auth_backend = sqlite3
+player_backend = sqlite3
+backend = sqlite3
+gameid = minetest
+world_name = room
+server_announce = false
+load_mod_superflat = mods/superflat
+load_mod_craftium_room = mods/craftium_env
+load_mod_craftium_chop_tree = false
+load_mod_voxel_api = mods/voxel_api
