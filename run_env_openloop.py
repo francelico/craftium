@@ -57,7 +57,8 @@ def main(args):
         if args.plot_voxel_obs and np.size(info['voxel_obs'])>0:
             plot_rgb(observation)
             voxels = np.transpose(info["voxel_obs"], (0,2,1,3)) # to go from NUE to ENU
-            plot_voxels(voxels[...,0])
+            fig,ax = plot_voxels(voxels[...,0])
+            fig.show()
             args.plot_voxel_obs = False
         if args.record_video:
             recorded_frames.append(observation)

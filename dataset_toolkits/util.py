@@ -132,7 +132,6 @@ def set_axes_equal(ax):
     ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
     ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
 
-
 def plot_voxels(voxels, size=80, alpha=0.4, unknown_node_color=(255, 51, 153)):
     # Get coordinates and node IDs of all non-air voxels
     xs, ys, zs = [], [], []
@@ -178,7 +177,7 @@ def plot_voxels(voxels, size=80, alpha=0.4, unknown_node_color=(255, 51, 153)):
     ax.legend(handles=legend_elements)
 
     set_axes_equal(ax)
-    plt.show()
+    return fig, ax
 
 class MockThreadPoolExecutor:
     """
