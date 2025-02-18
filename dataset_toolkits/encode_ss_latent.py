@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 import utils3d
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor
 from easydict import EasyDict as edict
 from queue import Queue
 from dataclasses import dataclass
@@ -51,10 +50,16 @@ class Arguments:
     """Process rank"""
     world_size: int = 1
     """Total number of processes"""
+    debug: bool = False
 
 if __name__ == '__main__':
 
     args = tyro.cli(Arguments)
+
+    if args.debug:
+        from util import MockThreadPoolExecutor as ThreadPoolExecutor
+    else:
+        from concurrent.futures import ThreadPoolExecutor
 
     if args.enc_model is None:
         latent_name = f'{args.enc_pretrained.split("/")[-1]}'
