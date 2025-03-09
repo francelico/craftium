@@ -92,6 +92,12 @@ class CraftiumEnv(Env):
                                  "or use a different environment.")
 
         _minetest_conf.update(minetest_conf)
+
+        #  out auto enlargement of fov for aspect ratios smaller than 16/10
+        aspect_ratio = obs_width / obs_height
+        if aspect_ratio < 16/10 and 'fov' in _minetest_conf:
+            _minetest_conf['fov'] = _minetest_conf['fov'] / np.clip(np.sqrt((16/10)/aspect_ratio), 1.0, 1.4)
+
         self.obs_width = obs_width
         self.obs_height = obs_height
         self.init_frames = init_frames // frameskip

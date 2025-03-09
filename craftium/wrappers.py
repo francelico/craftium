@@ -158,7 +158,8 @@ class NueToEnuVoxelObs(Wrapper):
         # (3[nue],) -> (3[enu],)
         info["player_pos"] = info["player_pos"][[2, 0, 1]]
         info["player_vel"] = info["player_vel"][[2, 0, 1]]
-        info["player_yaw"] = (info["player_yaw"] + 90) % 360
+        info["player_yaw"] = -info["player_yaw"]
+        info["player_pitch"] = -info["player_pitch"]
         return info
 
     def _apply_wrapper_vectorized_env(self, info):
