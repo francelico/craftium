@@ -15,6 +15,9 @@ import matplotlib.pyplot as plt
 
 from dataset_toolkits.util import plot_voxels, set_axes_equal
 
+#TODO:
+# - remove factor of 10 in player positions and vel.
+
 def _save_video(local_path, output_path):
     data_path = os.path.join(args.output_dir, local_path, 'data.npz')
     data = np.load(data_path)
@@ -37,29 +40,24 @@ def _save_voxel_obs(local_path, output_path):
     fig.savefig(os.path.join(os.path.dirname(output_path), 'voxel_obs.png'))
 
 def _save_multiview(local_path, output_path, sha256):
-    CAM_OFFSET = np.array([0, 0, 1.6]) # 1.6 (mineclone) or 1.47 (minetest)
-    PLAYER_IN_NODE_OFFSET = np.array([0, 0, 0.5]) # TODO: this is not always true
-    CAM_POSE = (PLAYER_IN_NODE_OFFSET + CAM_OFFSET)/64
-    YAW_OFFSET = 270
-    YAW_COEF = -1
+    CAM_OFFSET = np.array([0, 0, 1.47]) # 1.6 (mineclone) or 1.47 (minetest)
+    PLAYER_IN_NODE_OFFSET = np.array([0, 0, -.5])
+    CAM_POSE = (-PLAYER_IN_NODE_OFFSET + CAM_OFFSET)/64 # TODO: check if PLAYER_IN_NODE_OFFSET should be always neg
     rawdata_path = os.path.join(args.output_dir, local_path, 'data.npz')
     rawdata = np.load(rawdata_path)
     positions = utils3d.io.read_ply(os.path.join(args.output_dir, 'voxels', f'{sha256}.ply'))[0]
-    # positions = np.array([positions[:, 0], positions[:, 2], -positions[:, 1]]).T
     positions = torch.from_numpy(positions).float()
     batch_images = torch.tensor(rawdata["obs_rgb"]).float().permute(0,3,1,2)
     yaw_orig = torch.tensor(rawdata["player_yaw"]).float()
     pitch_orig = torch.tensor(rawdata["player_pitch"]).float()
 
-    yaw_offsets = torch.tensor([90, 270])
-    pitch_offsets = torch.tensor([0, 180])
     save_dir = os.path.dirname(output_path)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
     possible_combinations = [
-        # {"ycoef" : -1, "yoff" : 90, "pcoef" : 1, "poff" : 180},
-        # {"ycoef" : -1, "yoff" : 270, "pcoef" : -1, "poff" : 0},
-        {"ycoef": -1, "yoff": 270, "pcoef": 1, "poff": 0}, # THIS pWORKS!
+        # {"ycoef": -1, "yoff": 270, "pcoef": 1, "poff": 0}, # THIS pWORKS for extrinsics2 (maybe)
+        # {"ycoef": -1, "yoff": 90, "pcoef": -1, "poff": 0}, # THIS WORKS for extrinsics4
+        {"ycoef": 1, "yoff": 0, "pcoef": 1, "poff": 0}, # THIS WORKS for extrinsics4 + updated NUEtoENU wrapper
     ]
 
     for comb in possible_combinations:
@@ -70,9 +68,12 @@ def _save_multiview(local_path, output_path, sha256):
         yaw = (ycoef*yaw_orig + yoff) % 360
         pitch = pcoef*pitch_orig + poff
         cam_pose = torch.tile(torch.tensor(CAM_POSE), (len(batch_images), 1)).float()
-        batch_extrinsics = yaw_pitch_cam_pos_to_extrinsics2(yaw, pitch, cam_pose)
+        batch_extrinsics = yaw_pitch_cam_pos_to_extrinsics4(yaw, pitch, cam_pose)
         # batch_extrinsics = torch.tensor(rawdata["extrinsics_local"])
         batch_intrinsics = torch.tensor(rawdata['intrinsics'])
+        # fov_x = np.sqrt(16/10) * 90 # this is the horizontal fov in minetest #TODO: remove when ready
+        # fov_y = np.sqrt(16/10) * 90 # this is the vertical fov in minetest
+        # batch_intrinsics = utils3d.torch.intrinsics_from_fov_xy(torch.deg2rad(torch.tensor([fov_x])), torch.deg2rad(torch.tensor([fov_y]))).float()
         batch_intrinsics = torch.tile(batch_intrinsics, (len(batch_images), 1, 1))
         uv, depth = utils3d.torch.project_cv(positions, batch_extrinsics, batch_intrinsics)
         uv = uv * 2 - 1
@@ -84,9 +85,9 @@ def _save_multiview(local_path, output_path, sha256):
             align_corners=False,
         ).squeeze(2).permute(0, 2, 1).cpu().numpy()
         save_dir = os.path.dirname(output_path)
-        save_dir = os.path.join(save_dir, 'yaw_pitch_cam_pos_to_extrinsics2')
+        save_dir = os.path.join(save_dir, 'yaw_pitch_cam_pos_to_extrinsics4')
         os.makedirs(save_dir, exist_ok=True)
-        for k in [0,10,20,30]:
+        for k in [0,10,20,]:
             fig, ax = render_multiview(positions, f3d[k])
             os.makedirs(os.path.join(save_dir, f'frame_{k}'), exist_ok=True)
             frame = Image.fromarray(rawdata["obs_rgb"][k])
@@ -96,7 +97,7 @@ def _save_multiview(local_path, output_path, sha256):
         f3d = np.nanmean(f3d, axis=0).astype(np.uint8)
         fig, ax = render_multiview(positions, f3d)
         save_dir = os.path.dirname(output_path)
-        save_dir = os.path.join(save_dir, 'yaw_pitch_cam_pos_to_extrinsics2', 'combined')
+        save_dir = os.path.join(save_dir, 'yaw_pitch_cam_pos_to_extrinsics4', 'combined')
         os.makedirs(save_dir, exist_ok=True)
         fig.savefig(os.path.join(save_dir, f'YAW[{ycoef}]o{yoff}_P[{pcoef}]o{poff}.png'))
 
@@ -157,19 +158,32 @@ def yaw_pitch_cam_pos_to_extrinsics2(yaws, pitchs, poses):
     extrinsics = utils3d.torch.extrinsics_look_at(poses, look_at_poses, ups)
     return extrinsics
 
+def yaw_pitch_cam_pos_to_extrinsics4(yaws, pitchs, poses):
+    yaws = torch.deg2rad(yaws)
+    pitchs = torch.deg2rad(pitchs)
+    look_at_poses = torch.stack([
+        torch.sin(yaws) * torch.cos(pitchs),
+        torch.cos(yaws) * torch.cos(pitchs),
+        torch.sin(pitchs),
+    ], -1)
+    look_at_poses += poses
+    ups = torch.tile(torch.tensor([0, 0, 1], dtype=torch.float32), poses.shape[:-1] + (1,))
+    extrinsics = utils3d.torch.extrinsics_look_at(poses, look_at_poses, ups)
+    return extrinsics
+
 # TODO: remove when ready
-# def yaw_pitch_cam_pos_to_extrinsics3(yaws, pitchs, poses):
-#     yaws = torch.deg2rad(yaws)
-#     pitchs = torch.deg2rad(pitchs)
-#     look_at_poses = torch.stack([
-#         torch.cos(yaws) * torch.cos(pitchs),
-#         torch.sin(yaws) * torch.cos(pitchs),
-#         torch.sin(pitchs),
-#     ], -1)
-#     look_at_poses += poses
-#     ups = torch.tile(torch.tensor([0, 0, 1], dtype=torch.float32), poses.shape[:-1] + (1,))
-#     extrinsics = utils3d.torch.extrinsics_look_at(poses, look_at_poses, ups)
-#     return extrinsics
+def yaw_pitch_cam_pos_to_extrinsics3(yaws, pitchs, poses):
+    yaws = torch.deg2rad(yaws)
+    pitchs = torch.deg2rad(pitchs)
+    look_at_poses = torch.stack([
+        torch.cos(yaws) * torch.cos(pitchs),
+        torch.sin(yaws) * torch.cos(pitchs),
+        torch.sin(pitchs),
+    ], -1)
+    look_at_poses += poses
+    ups = torch.tile(torch.tensor([0, 0, 1], dtype=torch.float32), poses.shape[:-1] + (1,))
+    extrinsics = utils3d.torch.extrinsics_look_at(poses, look_at_poses, ups)
+    return extrinsics
 #
 # def new_yaw_pitch_cam_pos_to_extrinsics(yaws, pitchs, poses, invert=False):
 #     batch_size = yaws.shape[0]
@@ -291,7 +305,7 @@ def save_videos(metadata, max_workers=None, desc='Rendering recorded trajectorie
                 sha256 = metadatum['sha256']
                 _save_video(local_path, output_path)
                 _save_voxel_obs(local_path, output_path)
-                # _save_multiview(local_path, output_path, sha256) #TODO: uncomment when cleaned up
+                _save_multiview(local_path, output_path, sha256) #TODO: uncomment when cleaned up
                 pbar.update()
             except Exception as e:
                 print(f"Error processing object {sha256}: {e}")
