@@ -49,7 +49,7 @@ class MtChannel():
             self.voxel_obs_dy,
             self.voxel_obs_dz,
         )
-        return img, vox_obs, pos/100., vel/100., pitch/100., yaw/100., reward, termination
+        return img, vox_obs, pos/1000., vel/1000., pitch/100., yaw/100., reward, termination # pos,vel / 1000 to match 1 unit = 1 node.
 
     def send(self, keys: list[int], mouse_x: int, mouse_y: int, soft_reset: bool = False, kill: bool = False):
         assert len(keys) == 21, f"Keys list must be of length 21 and is {len(keys)}"

@@ -16,6 +16,10 @@ from dataset_toolkits.util import seed_everything
 from craftium.wrappers import NueToEnuVoxelObs, enu_to_nue
 
 EMPTY_SPACE_NODE_IDS = [126, 127]
+ENV_ID_2_CAM_OFFSET = {
+    "OpenWorldDataset-v0": (0, 0, 1.6), # mineclone based envs
+    "TestRoom-v0": (0, 0, 1.47), # minetest based envs
+}
 
 @dataclass
 class Args:
@@ -99,14 +103,51 @@ def set_trellis_input_voxel_info(dataset_params, args):
             np.array(dataset_params["minetest_voxel_info"]["origin_idx"]) - crop_left).tolist()
 
 def compute_intrisincs_extrinsics(level_data, level_meta, dataset_params):
-    num_levels = len(level_meta)
     metadata = list(level_meta.values())
     data = list(level_data.values())
-    pos = torch.tensor(np.array([(d["player_pos"]) for d in data]), dtype=torch.float32).cuda()
-    pos += torch.tensor(dataset_params["rgb_info"]["camera_offset"], dtype=torch.float32).reshape(1, 1, 3).cuda()
-    origin_xyz = torch.tensor(np.array([torch.tensor(m["spawn_pos"]["player_pos"]) for m in metadata])).cuda()
-    pos -= origin_xyz.reshape(num_levels, 1, 3)
+    player_pos = torch.tensor(np.array([(d["player_pos"]) for d in data]), dtype=torch.float32).cuda()
+    cam_pos_local = compute_cam_pose_local(player_pos, dataset_params)
 
+    intrinsics = compute_intrinsics(metadata)
+    extrinsics_local = compute_extrinsics(cam_pos_local, data)
+
+    for i, s in enumerate(level_data):
+        level_data[s]["intrinsics"] = intrinsics[i].cpu().numpy()
+        level_data[s]["extrinsics_local"] = extrinsics_local[i].cpu().numpy()
+        level_data[s]["extrinsics_global"] = None
+
+def compute_cam_pose_local(player_pos, dataset_params):
+
+    vox_preprocessing = dataset_params["trellis_input_voxel_info"]["active_voxel_preprocessing"]
+    assert (vox_preprocessing["pad"] == False and vox_preprocessing["scale"] == False and
+            vox_preprocessing["crop"] is not None), \
+        "Only cropping is supported when computing intrinsics and extrinsics"
+    assert all(vox_preprocessing["crop"]["left"]) == 0, \
+        "Only right crop is supported when computing intrinsics and extrinsics"
+
+    cam_pos_local = compute_local_pose_offset(player_pos)
+    cam_offset = torch.tensor(dataset_params["rgb_info"]["camera_offset"], dtype=torch.float32).reshape(1, 1,
+                                                                                                        3).cuda()
+    cam_pos_local += cam_offset
+    voxel_grid_size = torch.tensor(dataset_params["trellis_input_voxel_info"]["dims"][:3],
+                                   dtype=torch.float32).cuda()
+    cam_pos_local = cam_pos_local / voxel_grid_size.reshape(1, 1, 3)
+
+    return cam_pos_local
+
+def compute_local_pose_offset(player_pos):
+    pos_local = player_pos.abs() % 1
+    pos_local = torch.where(torch.round(pos_local, decimals=6) >= 0.5, -(1 - pos_local), pos_local)
+
+    # numpy version
+    # def compute_local_pose_offset(player_pos):
+    #     pos_local = np.abs(player_pos) % 1
+    #     pos_local = np.where(np.round(pos_local, 6) >= 0.5, -(1 - pos_local), pos_local)
+    #     return pos_local
+
+    return pos_local
+
+def compute_intrinsics(metadata):
     fovs_x = torch.deg2rad(torch.stack([torch.tensor(m["fov_x"]) for m in metadata]).cuda())
     fovs_y = torch.deg2rad(torch.tensor([torch.tensor(m["fov_y"]) for m in metadata]).cuda())
     intrinsics = utils3d.torch.intrinsics_from_fov_xy(fovs_x, fovs_y)
@@ -116,71 +157,40 @@ def compute_intrisincs_extrinsics(level_data, level_meta, dataset_params):
         for fov_x, fov_y in zip(fovs_x, fovs_y):
             intrinsics.append(utils3d.torch.intrinsics_from_fov_xy(fov_x, fov_y))
         return torch.stack(intrinsics)
+
     # intrinsics_test = _for_loop_intrinsics(fovs_x, fovs_y)
     # assert torch.allclose(intrinsics, intrinsics_test) #test passed
 
+    return intrinsics
+
+def compute_extrinsics(cam_pos, data):
     yaws = torch.tensor(np.array([d["player_yaw"] for d in data]), dtype=torch.float32).cuda()
     pitchs = torch.tensor(np.array([d["player_pitch"] for d in data]), dtype=torch.float32).cuda()
-    extrinsics_global = yaw_pitch_cam_pos_to_extrinsics(yaws, pitchs, pos)
-    extrinsics_local = yaw_pitch_cam_pos_to_extrinsics(yaws, pitchs, torch.zeros_like(pos))
-
-    for i, s in enumerate(level_data):
-        level_data[s]["intrinsics"] = intrinsics[i].cpu().numpy()
-        level_data[s]["extrinsics_local"] = extrinsics_local[i].cpu().numpy()
-        level_data[s]["extrinsics_global"] = extrinsics_global[i].cpu().numpy()
-
-def yaw_pitch_cam_pos_to_extrinsics2(yaws, pitchs, poses):
-    yaws = torch.deg2rad(yaws).cuda()
-    pitchs = torch.deg2rad(pitchs).cuda()
-    look_at_poses = -torch.stack([
-        torch.sin(yaws) * torch.cos(pitchs),
-        torch.cos(yaws) * torch.cos(pitchs),
-        torch.sin(pitchs),
-    ], -1).cuda()
-    look_at_poses += poses.cuda()
-    ups = torch.tile(torch.tensor([0, 0, 1], dtype=torch.float32).cuda(), poses.shape[:-1] + (1,))
-    extrinsics = utils3d.torch.extrinsics_look_at(poses, look_at_poses, ups)
-    return extrinsics
-
-def yaw_pitch_cam_pos_to_extrinsics(yaws, pitchs, poses):
     yaws = torch.deg2rad(yaws)
     pitchs = torch.deg2rad(pitchs)
-    look_at_poses = torch.stack([
-        torch.sin(yaws) * torch.cos(pitchs),
-        torch.cos(yaws) * torch.cos(pitchs),
-        torch.sin(pitchs),
-    ], -1).cuda()
-    look_at_poses += poses
-    ups = torch.tile(torch.tensor([0, 0, 1], dtype=torch.float32).cuda(), poses.shape[:-1] + (1,))
-    extrinsics = utils3d.torch.extrinsics_look_at(poses, look_at_poses, ups)
-
-    # for loop version
-    def _for_loop_test(yaws, pitchs, poses):
-        extrinsics = []
-        yaws = yaws.unsqueeze(-1)
-        pitchs = pitchs.unsqueeze(-1)
-        for s in range(yaws.shape[0]):
-            for i in range(yaws.shape[1]):
-                yaw = yaws[s][i]
-                pitch = pitchs[s][i]
-                pose = poses[s][i]
-                look_at_pose = torch.tensor([
-                    torch.sin(yaw) * torch.cos(pitch),
-                    torch.cos(yaw) * torch.cos(pitch),
-                    torch.sin(pitch),
-                ]).cuda()
-                look_at_pose += pose
-                extr = utils3d.torch.extrinsics_look_at(pose, look_at_pose, torch.tensor([0, 0, 1]).float().cuda())
-                extrinsics.append(extr)
-        extrinsics = torch.stack(extrinsics)
-        extrinsics = torch.reshape(extrinsics, (yaws.shape[0], yaws.shape[1], 4, 4))
-        return extrinsics
-    # extrinsics_test = _for_loop_test(yaws, pitchs, poses)
-    # assert torch.allclose(extrinsics, extrinsics_test) #test passed
+    extrinsics = yaw_pitch_cam_pose_to_extrinsics(yaws, pitchs, cam_pos)
 
     return extrinsics
 
+def yaw_pitch_cam_pose_to_extrinsics(yaw_rad, pitch_rad, cam_pos):
 
+    look_at_pos = torch.stack([
+        torch.sin(yaw_rad) * torch.cos(pitch_rad),
+        torch.cos(yaw_rad) * torch.cos(pitch_rad),
+        torch.sin(pitch_rad),
+    ], -1)
+    look_at_pos += cam_pos
+    ups = torch.tile(torch.tensor([0, 0, 1], dtype=torch.float32), cam_pos.shape[:-1] + (1,)).to(cam_pos.device)
+    extrinsics = utils3d.torch.extrinsics_look_at(cam_pos, look_at_pos, ups)
+    return extrinsics
+
+# kept in case needed later
+def compute_cam_pose_global(player_pos, dataset_params):
+    # cam_offset = torch.tensor(dataset_params["rgb_info"]["camera_offset"], dtype=torch.float32).reshape(1, 1, 3).cuda()
+    # cam_pos_global = player_pos + cam_offset
+    # origin_xyz = torch.tensor(np.array([torch.tensor(m["spawn_pos"]["player_pos"]) for m in metadata])).cuda()
+    # cam_pos_global -= origin_xyz.reshape(-1, 1, 3)
+    raise NotImplementedError
 
 def main(args):
     args.num_iters = args.num_levels * args.ep_timesteps // args.num_envs
@@ -211,11 +221,11 @@ def main(args):
         "rgb_info": {
             "dims": (args.resolution, args.resolution, 3),
             "dtype": str(np.uint8),
-            "camera_offset": (0, 0, 0), #TODO
+            "camera_offset": ENV_ID_2_CAM_OFFSET[args.env_id],
             "hud": False, # can be set to a dict in the future if enabled
         },
         "trellis_input_voxel_info": {
-            "dims": (64, 64, 64, 1024), #TODO: check
+            "dims": (64, 64, 64, 1024),
             "dtype": str(np.float32),
             "xyz": "ENU",
             "origin": "agent",
