@@ -104,7 +104,7 @@ def _save_multiviews(local_path, save_dir, sha256, save_frames=True):
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        f3d = np.nanmean(f3d, axis=0).astype(np.uint8)
+        f3d = np.nanmean(f3d, axis=0).astype(np.uint8) # converting to uint8 automatically sets nans to 0, matching the operation we do on nan multiview features in extract_features.py
     # f3d = np.nan_to_num(f3d, nan=0) needed in actual code to avoid model processing nans, but in this case we want to visualise them when plotting
     fig_multiview, ax_multiview = render_multiview(positions, f3d)
     combine_images_horizontally(fig_voxmt, fig_multiview, os.path.join(save_dir, 'voxel_multiview.png'))

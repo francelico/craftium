@@ -13,6 +13,7 @@ import gymnasium as gym
 from xvfbwrapper import Xvfb
 
 from dataset_toolkits.util import seed_everything
+from dataset_toolkits.trellis_random_utils import sphere_hammersley_sequence
 from craftium.wrappers import NueToEnuVoxelObs, enu_to_nue
 
 EMPTY_SPACE_NODE_IDS = [126, 127]
@@ -48,6 +49,8 @@ class Args:
     "resolution of the generated RGB observations"
     fov: int = 90
     "field of view of the generated RGB observations in degrees"
+    actions: str = "noop"
+    "actions to take in the environment, supported: noop, mouse_look, mouse_look+move, full, or a comma separated list of action labels"
     init_frames: int = 200
     "number of frames to wait before starting the episode"
     fps_max: int = 200
@@ -128,7 +131,7 @@ def compute_cam_pose_local(player_pos, dataset_params):
     cam_pos_local = compute_local_pose_offset(player_pos)
     cam_offset = torch.tensor(dataset_params["rgb_info"]["camera_offset"], dtype=torch.float32).reshape(1, 1,
                                                                                                         3).cuda()
-    cam_pos_local += cam_offset
+    cam_pos_local += cam_offset #TODO: different cam offset when sneaking
     voxel_grid_size = torch.tensor(dataset_params["trellis_input_voxel_info"]["dims"][:3],
                                    dtype=torch.float32).cuda()
     cam_pos_local = cam_pos_local / voxel_grid_size.reshape(1, 1, 3)
@@ -192,8 +195,55 @@ def compute_cam_pose_global(player_pos, dataset_params):
     # cam_pos_global -= origin_xyz.reshape(-1, 1, 3)
     raise NotImplementedError
 
+def yaw_pitch_controller(current_yaw, current_pitch, target_yaw, target_pitch, action_labels, tol=20):
+    pitch_error = target_pitch - current_pitch
+    yaw_error = min(target_yaw - current_yaw, (target_yaw - 360) - current_yaw, key=abs)
+    if abs(pitch_error) < tol and abs(yaw_error) < tol:
+        return action_labels.index("noop"), True
+    if abs(pitch_error) > abs(yaw_error):
+        act_label = "mouse y+" if pitch_error > 0 else "mouse y-"
+    else:
+        act_label = "mouse x+" if yaw_error > 0 else "mouse x-"
+    return action_labels.index(act_label), False
+
+def generate_pitch_yaw_setpoints(num_setpoints=10):
+    offset = (np.random.rand(), np.random.rand())
+    # Returns [(yaw_t, pitch_t), ...], yaw in [0, 2*pi], pitch in [-pi/2, pi/2]
+    setpoints = np.array([sphere_hammersley_sequence(i, num_setpoints, offset=offset) for i in range(num_setpoints)])
+    # convert from rad to deg, yaw setpoints to range [0, 360], pitch setpoints to range [-90, 90]
+    setpoints = np.rad2deg(setpoints)
+    # shuffle setpoints
+    np.random.shuffle(setpoints)
+    return setpoints.tolist()
+
 def main(args):
     args.num_iters = args.num_levels * args.ep_timesteps // args.num_envs
+    if args.actions != "noop" and args.env_id != "OpenWorldDataset-v0":
+        print("Only noop actions are supported outside of OpenWorldDataset-v0, switching to noop")
+        args.actions = "noop"
+    env_action_labels = ["noop"]
+    env_action_labels.extend(["forward", "backward", "left", "right", "jump", "sneak",
+                           "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4",
+                           "slot_5", "mouse x+", "mouse x-", "mouse y+", "mouse y-"])
+    if args.actions == "noop":
+        action_ids = env_action_labels.index("noop")
+    elif args.actions == "mouse_look":
+        action_ids = [env_action_labels.index("noop"), 
+                      env_action_labels.index("mouse x+"), env_action_labels.index("mouse x-"),
+                      env_action_labels.index("mouse y+"), env_action_labels.index("mouse y-")]
+    elif args.actions == "mouse_look+move":
+        action_ids = [env_action_labels.index("noop"),
+                      env_action_labels.index("mouse x+"), env_action_labels.index("mouse x-"),
+                      env_action_labels.index("mouse y+"), env_action_labels.index("mouse y-"),
+                      env_action_labels.index("forward"), env_action_labels.index("backward"),
+                      env_action_labels.index("left"), env_action_labels.index("right"),
+                      env_action_labels.index("jump"), env_action_labels.index("sneak"),]
+    elif args.actions == "full":
+        action_ids = list(range(len(env_action_labels)))
+    else:
+        action_labels = args.actions.split(",")
+        action_ids = [env_action_labels.index(a) for a in action_labels]
+        
     seed_everything(args.seed)
 
     # dataset metadata
@@ -209,6 +259,9 @@ def main(args):
                 "trellis": {"url": "placeholder", "commit": "placeholder"}
             },
         "craftium_env_info": None, #TODO query full minetest_conf
+        "agent_info": {
+            "action_space": args.actions,
+        },
         "model_pipeline_info": {} #TODO
         },
         "minetest_voxel_info": {
@@ -296,12 +349,22 @@ def main(args):
             ts = 0
             curr_seeds = [int(seeds.popleft()) for _ in range(args.num_envs)]
             observations, infos = envs.reset(seed=curr_seeds)
+            setpoints = deque(generate_pitch_yaw_setpoints(num_setpoints=args.ep_timesteps // 5))
+            yaw_setpoint, pitch_setpoint = setpoints.popleft()
             for s_idx, s in enumerate(curr_seeds):
                 level_meta[s] = copy.deepcopy(levelmeta_template)
                 data[s] = copy.deepcopy(leveldata_template)
                 level_meta[s]["seed"] = s
                 level_meta[s]["spawn_pos"] = {"player_pos": infos["player_pos"][s_idx].tolist(), "pitch": infos["player_pitch"][s_idx], "yaw": infos["player_yaw"][s_idx]}
-        actions = np.zeros(args.num_envs).astype(int) # NO-OP
+
+        if args.actions == "mouse_look":
+            action, setpoint_reached = yaw_pitch_controller(infos["player_yaw"][0], infos["player_pitch"][0], yaw_setpoint, pitch_setpoint, env_action_labels)
+            actions = np.array([action]) # TODO: remove this as we roll back to single env per script
+            if setpoint_reached and len(setpoints) > 0:
+                yaw_setpoint, pitch_setpoint = setpoints.popleft()
+        else:
+            random_sample = np.random.choice(len(action_ids), args.num_envs)
+            actions = np.array([action_ids[s] for s in random_sample])
         for s_idx, s in enumerate(curr_seeds):
             data[s]["obs_rgb"].append(observations[s_idx])
             data[s]["obs_voxel_mt"].append(infos["voxel_obs"][s_idx])
