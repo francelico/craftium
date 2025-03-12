@@ -11,13 +11,15 @@ voxel_radius = {
 }
 
 -- names of the items included in the initial inventory
-init_tools = { "mcl_tools:axe_stone", "mcl_torches:torch 256" }
-
-timeofday = 0.5 -- start episode at midday todo: randomize [0,1]
+init_tools = {} --{ "mcl_tools:axe_stone", "mcl_torches:torch 256" }
 
 -- executed when the player joins the game
 minetest.register_on_joinplayer(function(player, _last_login)
-	minetest.set_timeofday(timeofday)
+	minetest.set_timeofday(math.random())
+
+	-- set the player's view to the next yaw
+	player:set_look_vertical(math.rad(math.random(-20, 20)))
+	player:set_look_horizontal(math.rad(math.random(0, 360)))
 
 	-- setup initial inventory
 	local inv = player:get_inventory()
@@ -34,7 +36,6 @@ end)
 
 -- make game's time match with learning timesteps
 minetest.register_globalstep(function(dtime)
-	minetest.set_timeofday(timeofday)
 
 	local player = minetest.get_connected_players()[1]
 
@@ -66,12 +67,6 @@ minetest.register_globalstep(function(dtime)
 	if mcl_experience then
 		mcl_experience.remove_hud(player)
 	end
-
-	-- set the player's view to the next yaw
-	local YAW = math.random(0, 360)
-	local PITCH = math.random(-20, 20)
-	player:set_look_vertical(math.rad(PITCH))
-	player:set_look_horizontal(math.rad(YAW))
 
 	-- if the player is connected:
 	local player_pos = player:get_pos()
