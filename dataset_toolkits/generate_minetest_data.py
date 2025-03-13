@@ -1,6 +1,7 @@
 import json
 import os
 import copy
+import sys
 from collections import deque
 from typing import Optional
 from dataclasses import dataclass
@@ -24,10 +25,11 @@ ENV_ID_2_CAM_OFFSET = {
 
 @dataclass
 class Args:
+    dataset_meta_only: bool = False
+    """If True, only the dataset metadata will be generated. Script must be run again with this set to False to start generating the data."""
     dataset_name: str = "testdataset"
     dataset_dir: str = "datasets"
     env_id: str = "OpenWorldDataset-v0"
-    num_envs: int = 2
     async_envs: bool = False
     mt_port: int = 49155
     """TCP port used by Minetest server and client communication. Multiple envs will use successive ports."""
@@ -53,43 +55,31 @@ class Args:
     "actions to take in the environment, supported: noop, mouse_look, mouse_look+move, full, or a comma separated list of action labels"
     init_frames: int = 200
     "number of frames to wait before starting the episode"
-    fps_max: int = 200
+    fps_max: int = 24
     "target fps for the environment"
     pmul: Optional[int] = None
     """Physics speed multiplier. Defaults to the default value of CraftiumEnv."""
+    rank: int = 0
+    """Process rank"""
+    world_size: int = 1
+    """Total number of processes"""
+    num_env_subprocesses: int = 1
+    """Number of concurrent env instances per instance of this script"""
+    num_levels_per_subprocess: int = 1
+    """Number of levels to generate per env instance launched by this script"""
+    overwrite_existing: bool = False
+    """If True, existing data for a given level seed will be overwritten"""
+    debug: bool = False
+    """Enable debug mode. Will run the code in a single process."""
 
-    # Runtime args
-    num_iters: int = 0
-
-# def make_env(env_id, run_dir_prefix, mt_port, obs_width, obs_height, voxel_obs_rx, voxel_obs_ry, voxel_obs_rz, init_frames,
-#              seed, fps_max, pmul, minetest_conf):
-def make_env(craftium_kwargs, env_idx, seed):
-    def thunk():
-        # craftium_kwargs = dict(
-        #     run_dir_prefix=run_dir_prefix,
-        #     mt_port=mt_port,
-        #     rgb_observations=True,
-        #     obs_width=obs_width,
-        #     obs_height=obs_height,
-        #     voxel_obs_rx=voxel_obs_rx,
-        #     voxel_obs_ry=voxel_obs_ry,
-        #     voxel_obs_rz=voxel_obs_rz,
-        #     init_frames=init_frames,
-        #     seed=seed,
-        #     fps_max=fps_max,
-        #     pmul=pmul,
-        #     minetest_conf=minetest_conf,
-        # )
-        craftium_kwargs["voxel_obs_rx"], craftium_kwargs["voxel_obs_ry"], craftium_kwargs["voxel_obs_rz"] = enu_to_nue(
-            craftium_kwargs["voxel_obs_rx"], craftium_kwargs["voxel_obs_ry"], craftium_kwargs["voxel_obs_rz"])
-        craftium_kwargs["seed"] = seed
-        craftium_kwargs["mt_port"] += env_idx
-        craftium_kwargs["enable_voxel_obs"] = True
-        env = gym.make(**craftium_kwargs)
-        env = NueToEnuVoxelObs(env)
-        return env
-
-    return thunk
+def make_env(craftium_kwargs, mt_port_offset):
+    craftium_kwargs["voxel_obs_rx"], craftium_kwargs["voxel_obs_ry"], craftium_kwargs["voxel_obs_rz"] = enu_to_nue(
+        craftium_kwargs["voxel_obs_rx"], craftium_kwargs["voxel_obs_ry"], craftium_kwargs["voxel_obs_rz"])
+    craftium_kwargs["mt_port"] += mt_port_offset
+    craftium_kwargs["enable_voxel_obs"] = True
+    env = gym.make(**craftium_kwargs)
+    env = NueToEnuVoxelObs(env)
+    return env
 
 def set_trellis_input_voxel_info(dataset_params, args):
     mt_vox_shape = np.array(dataset_params["minetest_voxel_info"]["dims"][:3])
@@ -216,34 +206,7 @@ def generate_pitch_yaw_setpoints(num_setpoints=10):
     np.random.shuffle(setpoints)
     return setpoints.tolist()
 
-def main(args):
-    args.num_iters = args.num_levels * args.ep_timesteps // args.num_envs
-    if args.actions != "noop" and args.env_id != "OpenWorldDataset-v0":
-        print("Only noop actions are supported outside of OpenWorldDataset-v0, switching to noop")
-        args.actions = "noop"
-    env_action_labels = ["noop"]
-    env_action_labels.extend(["forward", "backward", "left", "right", "jump", "sneak",
-                           "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4",
-                           "slot_5", "mouse x+", "mouse x-", "mouse y+", "mouse y-"])
-    if args.actions == "noop":
-        action_ids = env_action_labels.index("noop")
-    elif args.actions == "mouse_look":
-        action_ids = [env_action_labels.index("noop"), 
-                      env_action_labels.index("mouse x+"), env_action_labels.index("mouse x-"),
-                      env_action_labels.index("mouse y+"), env_action_labels.index("mouse y-")]
-    elif args.actions == "mouse_look+move":
-        action_ids = [env_action_labels.index("noop"),
-                      env_action_labels.index("mouse x+"), env_action_labels.index("mouse x-"),
-                      env_action_labels.index("mouse y+"), env_action_labels.index("mouse y-"),
-                      env_action_labels.index("forward"), env_action_labels.index("backward"),
-                      env_action_labels.index("left"), env_action_labels.index("right"),
-                      env_action_labels.index("jump"), env_action_labels.index("sneak"),]
-    elif args.actions == "full":
-        action_ids = list(range(len(env_action_labels)))
-    else:
-        action_labels = args.actions.split(",")
-        action_ids = [env_action_labels.index(a) for a in action_labels]
-        
+def generate_dataset_meta(args):
     seed_everything(args.seed)
 
     # dataset metadata
@@ -251,14 +214,16 @@ def main(args):
         {
         "info": {
             "name": args.dataset_name,
+            "description": "Minetest dataset",
+            "script_name": os.path.basename(__file__),
+            "script_args": vars(args),
             "version": "0.0.1",
-            "minetest_logpath": None, #TODO
+            "minetest_rundir_root": args.mt_run_dir,
             "codebase_commit": {
                 "craftium": {"url": "placeholder", "commit": "placeholder"}, #TODO
                 "minetest": {"url": "placeholder", "commit": "placeholder"},
                 "trellis": {"url": "placeholder", "commit": "placeholder"}
             },
-        "craftium_env_info": None, #TODO query full minetest_conf
         "agent_info": {
             "action_space": args.actions,
         },
@@ -295,17 +260,24 @@ def main(args):
     with open(os.path.join(dataset_root, "dataset_params.json"), "w") as f:
         json.dump(dataset_params, f, indent=4)
 
-    levelmeta_template = {
+    seeds = np.random.randint(0, 2 ** 31, args.num_levels).tolist()
+    with open(os.path.join(dataset_root, "level_seeds.txt"), "w") as f:
+        for s in seeds:
+            f.write(f"{s}\n")
+
+def generate_level_chunk(seeds, args, dataset_params):
+
+    level_meta_template = {
         "seed": None,
         "fov_x": args.fov,
         "fov_y": args.fov,
         "spawn_pos": {"player_pos": None, "player_pitch": None, "player_yaw": None},
-        "world_start_time": np.random.randint(0, 23999),
+        "minetest_conf": None,
     }
 
-    leveldata_template = {
+    level_data_template = {
         "timestep_craftium": [], # [Nsteps]
-        "timestep_minetest": [], # [Nsteps] #TODO
+        "dt_minetest": [], # [Nsteps] #TODO
         "player_pos": [], # [Nsteps, 3]
         "player_vel": [], # [Nsteps, 3]
         "player_pitch": [], # [Nsteps]
@@ -321,89 +293,160 @@ def main(args):
         "extrinsics_global": [], # [Nsteps, 4, 4]
     }
 
-    # env setup
-    craftium_kwargs = dict(
-        id=f"Craftium/{args.env_id}",
-        mt_port=args.mt_port,
-        run_dir_prefix=args.mt_run_dir,
-        rgb_observations=True,
-        enable_voxel_obs=True,
-        obs_width=args.resolution,
-        obs_height=args.resolution,
-        voxel_obs_rx=args.voxel_obs_rx,
-        voxel_obs_ry=args.voxel_obs_ry,
-        voxel_obs_rz=args.voxel_obs_rz,
-        init_frames=args.init_frames,
-        fps_max=args.fps_max,
-        pmul=args.pmul,
-        minetest_conf= {"fov": args.fov, "world_start_time": levelmeta_template["world_start_time"]},
-    )
-    vector_env = gym.vector.SyncVectorEnv if not args.async_envs else gym.vector.AsyncVectorEnv
-    seeds = deque(np.random.randint(0, 2 ** 31, args.num_levels))
-    envs = vector_env([make_env(craftium_kwargs, idx, 0) for idx in range(args.num_envs)])
+    if args.actions != "noop" and args.env_id != "OpenWorldDataset-v0":
+        print("Only noop actions are supported outside of OpenWorldDataset-v0, switching to noop")
+        args.actions = "noop"
+    env_action_labels = ["noop"]
+    env_action_labels.extend(["forward", "backward", "left", "right", "jump", "sneak",
+                           "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4",
+                           "slot_5", "mouse x+", "mouse x-", "mouse y+", "mouse y-"])
+    if args.actions == "noop":
+        action_ids = env_action_labels.index("noop")
+    elif args.actions == "mouse_look":
+        action_ids = [env_action_labels.index("noop"),
+                      env_action_labels.index("mouse x+"), env_action_labels.index("mouse x-"),
+                      env_action_labels.index("mouse y+"), env_action_labels.index("mouse y-")]
+    elif args.actions == "mouse_look+move":
+        action_ids = [env_action_labels.index("noop"),
+                      env_action_labels.index("mouse x+"), env_action_labels.index("mouse x-"),
+                      env_action_labels.index("mouse y+"), env_action_labels.index("mouse y-"),
+                      env_action_labels.index("forward"), env_action_labels.index("backward"),
+                      env_action_labels.index("left"), env_action_labels.index("right"),
+                      env_action_labels.index("jump"), env_action_labels.index("sneak"),]
+    elif args.actions == "full":
+        action_ids = list(range(len(env_action_labels)))
+    else:
+        action_labels = args.actions.split(",")
+        action_ids = [env_action_labels.index(a) for a in action_labels]
 
-    level_meta = {}
-    data = {}
-    for i in range(args.num_iters):
-        if i % args.ep_timesteps == 0:
-            ts = 0
-            curr_seeds = [int(seeds.popleft()) for _ in range(args.num_envs)]
-            observations, infos = envs.reset(seed=curr_seeds)
-            setpoints = deque(generate_pitch_yaw_setpoints(num_setpoints=args.ep_timesteps // 5))
-            yaw_setpoint, pitch_setpoint = setpoints.popleft()
-            for s_idx, s in enumerate(curr_seeds):
-                level_meta[s] = copy.deepcopy(levelmeta_template)
-                data[s] = copy.deepcopy(leveldata_template)
-                level_meta[s]["seed"] = s
-                level_meta[s]["spawn_pos"] = {"player_pos": infos["player_pos"][s_idx].tolist(), "pitch": infos["player_pitch"][s_idx], "yaw": infos["player_yaw"][s_idx]}
+    seeds = seeds.reshape(-1, args.num_env_subprocesses, args.num_levels_per_subprocess)
+    try:
+        with ThreadPoolExecutor(max_workers=args.num_env_subprocesses) as executor:
+            def env_process_executor(seed_sequence, process_idx):
 
-        if args.actions == "mouse_look":
-            action, setpoint_reached = yaw_pitch_controller(infos["player_yaw"][0], infos["player_pitch"][0], yaw_setpoint, pitch_setpoint, env_action_labels)
-            actions = np.array([action]) # TODO: remove this as we roll back to single env per script
-            if setpoint_reached and len(setpoints) > 0:
-                yaw_setpoint, pitch_setpoint = setpoints.popleft()
-        else:
-            random_sample = np.random.choice(len(action_ids), args.num_envs)
-            actions = np.array([action_ids[s] for s in random_sample])
-        for s_idx, s in enumerate(curr_seeds):
-            data[s]["obs_rgb"].append(observations[s_idx])
-            data[s]["obs_voxel_mt"].append(infos["voxel_obs"][s_idx])
-            data[s]["timestep_craftium"].append(ts)
-            data[s]["action"].append(actions[s_idx].tolist())
-            data[s]["player_pitch"].append(infos["player_pitch"][s_idx])
-            data[s]["player_yaw"].append(infos["player_yaw"][s_idx])
-            data[s]["player_pos"].append(infos["player_pos"][s_idx].tolist())
-            data[s]["player_vel"].append(infos["player_vel"][s_idx].tolist())
-        observations, rewards, terms, truncs, infos = envs.step(actions)
-        for s_idx, s in enumerate(curr_seeds):
-            data[s]["reward"].append(rewards[s_idx])
-            data[s]["termination_flag"].append(terms[s_idx])
-            data[s]["truncation_flag"].append(truncs[s_idx])
-        ts += 1
+                seeds_to_gen = []
+                if not args.overwrite_existing:
+                    for seed in seed_sequence:
+                        data_path = os.path.join(args.dataset_dir, args.dataset_name, "raw", args.env_id, str(seed),
+                                                 "data.npz")
+                        if os.path.exists(data_path):
+                            print(f"Level {seed} already exists, skipping")
+                        else:
+                            seeds_to_gen.append(seed)
+                else:
+                    seeds_to_gen = seed_sequence
 
-    data = {s: {k: np.array(v) for k, v in d.items()} for s, d in data.items()}
-    compute_intrisincs_extrinsics(data, level_meta, dataset_params)
+                if not seeds_to_gen:
+                    return
 
-    # save data according to the following structure:
-    #     - raw
-    #         - dataset_name (allows for mixing datasets later)
-    #             - seed_folder (one per level)
-    #                 - level_metadata.json
-    #                 - data.npz
-    if not os.path.exists(os.path.join(dataset_root, "raw", args.env_id)):
-        os.makedirs(os.path.join(dataset_root, "raw", args.env_id))
-    for s in level_meta:
-        level_folder = os.path.join(dataset_root, "raw", args.env_id, str(s))
-        os.makedirs(level_folder, exist_ok=True)
-        with open(os.path.join(level_folder, "level_metadata.json"), "w") as f:
-            json.dump(level_meta[s], f, indent=4)
-        np.savez_compressed(os.path.join(level_folder, "data.npz"), **data[s])
+                seed_everything(args.seed + args.rank * 1000 + process_idx)
+                # env setup
+                craftium_kwargs = dict(
+                    id=f"Craftium/{args.env_id}",
+                    mt_port=args.mt_port,
+                    run_dir_prefix=args.mt_run_dir,
+                    rgb_observations=True,
+                    enable_voxel_obs=True,
+                    obs_width=args.resolution,
+                    obs_height=args.resolution,
+                    voxel_obs_rx=args.voxel_obs_rx,
+                    voxel_obs_ry=args.voxel_obs_ry,
+                    voxel_obs_rz=args.voxel_obs_rz,
+                    init_frames=args.init_frames,
+                    fps_max=args.fps_max,
+                    pmul=args.pmul,
+                    minetest_conf={"fov": args.fov, "world_start_time": np.random.randint(0, 23999)},
+                )
+                env = make_env(craftium_kwargs, mt_port_offset = args.rank * 1000 + process_idx)
+                seeds_to_gen = deque(seeds_to_gen)
 
+                level_meta = {}
+                data = {}
+                for i in range(args.ep_timesteps * len(seeds_to_gen)):
+                    if i % args.ep_timesteps == 0:
+                        ts = 0
+                        seed = seeds_to_gen.popleft()
+                        obs, info = env.reset(
+                            seed=seed,
+                            options={"minetest_conf": {"world_start_time": np.random.randint(0, 23999)}}
+                        )
+                        setpoints = deque(generate_pitch_yaw_setpoints(num_setpoints=args.ep_timesteps // 5))
+                        yaw_setpoint, pitch_setpoint = setpoints.popleft()
+                        level_meta[seed] = copy.deepcopy(level_meta_template)
+                        data[seed] = copy.deepcopy(level_data_template)
+                        level_meta[seed]["seed"] = seed
+                        level_meta[seed]["spawn_pos"] = {"player_pos": info["player_pos"].tolist(),
+                                                      "pitch": info["player_pitch"],
+                                                      "yaw": info["player_yaw"]}
+                        level_meta[seed]["minetest_conf"] = env.unwrapped.get_mt_config()
+
+                    if args.actions == "mouse_look":
+                        action, setpoint_reached = yaw_pitch_controller(info["player_yaw"], info["player_pitch"],
+                                                                        yaw_setpoint, pitch_setpoint, env_action_labels)
+                        if setpoint_reached and len(setpoints) > 0:
+                            yaw_setpoint, pitch_setpoint = setpoints.popleft()
+                    else:
+                        random_sample = np.random.choice(len(action_ids))
+                        action = action_ids[random_sample]
+                    data[seed]["obs_rgb"].append(obs)
+                    data[seed]["obs_voxel_mt"].append(info["voxel_obs"])
+                    data[seed]["timestep_craftium"].append(ts)
+                    data[seed]["dt_minetest"].append(info["mt_dtime"])
+                    data[seed]["action"].append(action)
+                    data[seed]["player_pitch"].append(info["player_pitch"])
+                    data[seed]["player_yaw"].append(info["player_yaw"])
+                    data[seed]["player_pos"].append(info["player_pos"].tolist())
+                    data[seed]["player_vel"].append(info["player_vel"].tolist())
+                    obs, reward, term, trunc, info = env.step(action)
+                    data[seed]["reward"].append(reward)
+                    data[seed]["termination_flag"].append(term)
+                    data[seed]["truncation_flag"].append(trunc)
+                    ts += 1
+
+                env.close()
+
+                data = {s: {k: np.array(v) for k, v in d.items()} for s, d in data.items()}
+                compute_intrisincs_extrinsics(data, level_meta, dataset_params)
+
+                # save data according to the following structure:
+                #     - raw
+                #         - dataset_name (allows for mixing datasets later)
+                #             - seed_folder (one per level)
+                #                 - level_metadata.json
+                #                 - data.npz
+                dataset_root = os.path.join(args.dataset_dir, args.dataset_name)
+                if not os.path.exists(os.path.join(dataset_root, "raw", args.env_id)):
+                    os.makedirs(os.path.join(dataset_root, "raw", args.env_id))
+                for s in level_meta:
+                    level_folder = os.path.join(dataset_root, "raw", args.env_id, str(s))
+                    os.makedirs(level_folder, exist_ok=True)
+                    with open(os.path.join(level_folder, "level_metadata.json"), "w") as f:
+                        json.dump(level_meta[s], f, indent=4)
+                    np.savez_compressed(os.path.join(level_folder, "data.npz"), **data[s])
+
+            for seed_chunk in seeds:
+                executor.map(env_process_executor, seed_chunk.tolist(), [p_id for p_id in range(len(seed_chunk))])
+    except Exception as e:
+        print(f"Error happened during processing. Traceback: {e}")
 
 if __name__ == "__main__":
-
     args = tyro.cli(Args)
+    if args.debug:
+        from util import MockThreadPoolExecutor as ThreadPoolExecutor
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+    if args.dataset_meta_only:
+        generate_dataset_meta(args)
+        sys.exit(0)
+
+    dataset_params = json.load(open(os.path.join(args.dataset_dir, args.dataset_name, "dataset_params.json")))
+    level_seeds = np.loadtxt(os.path.join(args.dataset_dir, args.dataset_name, "level_seeds.txt"), dtype=int)
+    start = len(level_seeds) * args.rank // args.world_size
+    end = len(level_seeds) * (args.rank + 1) // args.world_size
+    level_seeds = level_seeds[start:end]
+
     vdisplay = Xvfb()
     vdisplay.start()
-    main(args)
+    generate_level_chunk(level_seeds, args, dataset_params)
     vdisplay.stop()
