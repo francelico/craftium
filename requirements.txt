@@ -3,6 +3,6 @@ numpy>=2.0.1 # 2.0.2
 PyYAML==6.0.1
 setuptools>=66.1.1 # 75.6.0
 stable_baselines3==2.3.2
-torch>=2.1.0 # 2.6.0
+torch>=2.6.0 # 2.6.0
 tyro==0.8.5
 pybind11==2.13.1 #required but not installed in my env?
