@@ -202,7 +202,7 @@ void Client::startPyConn()
     printf("\n[INFO] PyConn started in port %d\n\n", py_port);
 }
 
-void Client::pyConnStep(LocalPlayer *myplayer) {
+void Client::pyConnStep(LocalPlayer *myplayer, float dtime){
     // NOTE: the `actions` array is defined in craftium.h
     int n_send, n_recv, W, H, Xv, Yv, Zv, obs_rwd_buffer_size;
     u32 c; // stores the RGBA pixel color
@@ -228,10 +228,11 @@ void Client::pyConnStep(LocalPlayer *myplayer) {
       W*H*3 for the WxH RGB image, +8 for the reward value (a double),
       and +1 for the episode termination flag
     */
+    // [RGB, (pos,vel,pitch,yaw), dtime, reward, termination]
     if (g_settings->getBool("rgb_frames")) {
-        obs_rwd_buffer_size = W*H*3 + 32 + 8 + 1; // full RGB images
+        obs_rwd_buffer_size = W*H*3 + 32 + 4 + 8 + 1; // full RGB images
     } else {
-        obs_rwd_buffer_size = W*H + 32 + 8 + 1; // grayscale images
+        obs_rwd_buffer_size = W*H + 32 + 4 + 8 + 1; // grayscale images
     }
 
 	Xv = 2 * g_settings->getU32("voxel_obs_rx") + 1;
@@ -302,6 +303,10 @@ void Client::pyConnStep(LocalPlayer *myplayer) {
 	memcpy(&obs_rwd_buffer[i+24], &pitch, sizeof(s32));
 	memcpy(&obs_rwd_buffer[i+28], &yaw, sizeof(s32));
 	i = i + 32;
+
+	// Encode the delta time
+	memcpy(&obs_rwd_buffer[i], &dtime, sizeof(float));
+	i = i + 4;
 
     /* Encode the reward (double) as  8 bytes at the end of the buffer */
     char *rewardBytes = (char*)&g_reward;
@@ -798,7 +803,7 @@ void Client::step(float dtime)
 		Handle environment
 	*/
 	LocalPlayer *player = m_env.getLocalPlayer();
-        pyConnStep(player);
+        pyConnStep(player, dtime);
 
 	// Step environment (also handles player controls)
 	m_env.step(dtime);

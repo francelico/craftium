@@ -182,6 +182,7 @@ int read_large_from_socket(int socket_fd, char *buffer, int total_size) {
 
 static PyObject* server_recv(PyObject* self, PyObject* args) {
   int connfd, n_bytes, obs_width, obs_height, n_read, n_channels, n_vox_channels, voxel_x, voxel_y, voxel_z;
+  float dtime;
   double reward;
   int32_t yaw, pitch;
   char *buff;
@@ -219,13 +220,17 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
   memcpy(&reward, &buff[n_bytes-9], sizeof(reward));
   PyObject* py_reward = PyFloat_FromDouble(reward);
 
+  // Retrieve the delta time
+  memcpy(&dtime, &buff[n_bytes-13], sizeof(dtime));
+  PyObject* py_dtime = PyFloat_FromDouble((double)dtime);
+
   // Retrieve backwards the yaw [4], pitch [4], velocity [12] and position [12] = 32 bytes
   float* array_pos_data = (float*)malloc(3 * sizeof(float));
   float* array_vel_data = (float*)malloc(3 * sizeof(float));
-  memcpy(&yaw, &buff[n_bytes-13], sizeof(int32_t));
-  memcpy(&pitch, &buff[n_bytes-17], sizeof(int32_t));
-  memcpy(array_vel_data, &buff[n_bytes-29], 3 * sizeof(float));
-  memcpy(array_pos_data, &buff[n_bytes-41], 3 * sizeof(float));
+  memcpy(&yaw, &buff[n_bytes-17], sizeof(int32_t));
+  memcpy(&pitch, &buff[n_bytes-21], sizeof(int32_t));
+  memcpy(array_vel_data, &buff[n_bytes-33], 3 * sizeof(float));
+  memcpy(array_pos_data, &buff[n_bytes-45], 3 * sizeof(float));
   npy_intp dims_v3f[1] = {3};
   PyObject* pyarray_pos = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_pos_data);
   PyObject* pyarray_vel = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_vel_data);
@@ -244,6 +249,7 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
     free(array_vel_data);
     Py_XDECREF(py_termination);
     Py_XDECREF(py_reward);
+    Py_XDECREF(py_dtime);
     Py_XDECREF(pyarray_pos);
     Py_XDECREF(pyarray_vel);
     Py_XDECREF(py_pitch);
@@ -275,6 +281,7 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
     Py_XDECREF(pyarray_vox);
     Py_XDECREF(py_termination);
     Py_XDECREF(py_reward);
+    Py_XDECREF(py_dtime);
     Py_XDECREF(pyarray_pos);
     Py_XDECREF(pyarray_vel);
     Py_XDECREF(py_pitch);
@@ -289,10 +296,11 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
   PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_rgb, NPY_ARRAY_OWNDATA);
   PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_vox, NPY_ARRAY_OWNDATA);
 
-  PyObject* tuple = PyTuple_Pack(8, pyarray_rgb, pyarray_vox, pyarray_pos, pyarray_vel, py_pitch, py_yaw, py_reward, py_termination);
+  PyObject* tuple = PyTuple_Pack(9, pyarray_rgb, pyarray_vox, pyarray_pos, pyarray_vel, py_pitch, py_yaw, py_dtime, py_reward, py_termination);
 
   // Safe to DECREF everything as tuple has increased their reference counts
   Py_DECREF(py_reward);
+  Py_DECREF(py_dtime);
   Py_DECREF(py_termination);
   Py_DECREF(pyarray_pos);
   Py_DECREF(pyarray_vel);

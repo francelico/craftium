@@ -34,11 +34,11 @@ class MtChannel():
         # the RGB image + 8 bytes of the reward + 1 of the soft-reset flag
         self.n_chan = 3 if rgb_imgs else 1
         self.n_vox_chan = 3 if voxel_obs else 0
-        self.rec_bytes = (img_width*img_height*self.n_chan + 32 + 8 + 1
+        self.rec_bytes = (img_width*img_height*self.n_chan + 32 + 4 + 8 + 1
                           + self.voxel_obs_dx*self.voxel_obs_dy*self.voxel_obs_dz*self.n_vox_chan*4)
 
     def receive(self):
-        img, vox_obs, pos, vel, pitch, yaw, reward, termination = mt_server.server_recv(
+        img, vox_obs, pos, vel, pitch, yaw, dtime, reward, termination = mt_server.server_recv(
             self.connfd,
             self.rec_bytes,
             self.img_width,
@@ -49,7 +49,7 @@ class MtChannel():
             self.voxel_obs_dy,
             self.voxel_obs_dz,
         )
-        return img, vox_obs, pos/1000., vel/1000., pitch/100., yaw/100., reward, termination # pos,vel / 1000 to match 1 unit = 1 node.
+        return img, vox_obs, pos/1000., vel/1000., pitch/100., yaw/100., dtime, reward, termination # pos,vel / 1000 to match 1 unit = 1 node.
 
     def send(self, keys: list[int], mouse_x: int, mouse_y: int, soft_reset: bool = False, kill: bool = False):
         assert len(keys) == 21, f"Keys list must be of length 21 and is {len(keys)}"
