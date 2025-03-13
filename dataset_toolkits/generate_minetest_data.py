@@ -300,7 +300,7 @@ def main(args):
         "fov_x": args.fov,
         "fov_y": args.fov,
         "spawn_pos": {"player_pos": None, "player_pitch": None, "player_yaw": None},
-        "timeofday": None #TODO
+        "world_start_time": np.random.randint(0, 23999),
     }
 
     leveldata_template = {
@@ -336,7 +336,7 @@ def main(args):
         init_frames=args.init_frames,
         fps_max=args.fps_max,
         pmul=args.pmul,
-        minetest_conf= {"fov": args.fov},
+        minetest_conf= {"fov": args.fov, "world_start_time": levelmeta_template["world_start_time"]},
     )
     vector_env = gym.vector.SyncVectorEnv if not args.async_envs else gym.vector.AsyncVectorEnv
     seeds = deque(np.random.randint(0, 2 ** 31, args.num_levels))

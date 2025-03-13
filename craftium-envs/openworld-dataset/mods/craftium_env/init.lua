@@ -15,7 +15,7 @@ init_tools = {} --{ "mcl_tools:axe_stone", "mcl_torches:torch 256" }
 
 -- executed when the player joins the game
 minetest.register_on_joinplayer(function(player, _last_login)
-	minetest.set_timeofday(math.random())
+	minetest.set_timeofday(tonumber(minetest.settings:get("world_start_time"))/24000)
 
 	-- set the player's view to the next yaw
 	player:set_look_vertical(math.rad(math.random(-20, 20)))
