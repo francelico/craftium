@@ -1,0 +1,15 @@
+[submodule "craftium-envs/minetest_game"]
+	path = craftium-envs/minetest_game
+	url = https://github.com/luanti-org/minetest_game
+[submodule "craftium-envs/common_mods/mobs_monster"]
+	path = craftium-envs/common_mods/mobs_monster
+	url = https://github.com/minetest-mirrors/mobs_monster
+[submodule "craftium-envs/common_mods/superflat"]
+	path = craftium-envs/common_mods/superflat
+	url = https://github.com/srifqi/superflat
+[submodule "craftium-envs/common_mods/mobs_redo"]
+	path = craftium-envs/common_mods/mobs
+	url = https://github.com/minetest-mirrors/mobs_redo
+[submodule "craftium-envs/common_games/mineclone2"]
+	path = craftium-envs/common_games/mineclone2
+	url = https://github.com/VoxeLibre/VoxeLibre
