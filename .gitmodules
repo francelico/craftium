@@ -13,6 +13,3 @@
 [submodule "craftium-envs/voxel-libre2/games/mineclone2"]
 	path = craftium-envs/common_games/mineclone2
 	url = https://git.minetest.land/VoxeLibre/VoxeLibre.git
-[submodule "trellis/representations/mesh/flexicubes"]
-	path = trellis/representations/mesh/flexicubes
-	url = https://github.com/MaxtirError/FlexiCubes.git

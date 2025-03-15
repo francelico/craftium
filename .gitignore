@@ -44,6 +44,9 @@ build/.cmake/
 appimage-build
 AppDir
 
+## Python
+__pycache__/
+
 ## Files related to Minetest development cycle
 /*.patch
 *.diff
@@ -133,7 +136,6 @@ lib/irrlichtmt
 client/mod_storage.sqlite
 
 ## Craftium
-__pycache__/
 craftium.egg-info
 craftium/craftium-envs
 craftium/bin/
@@ -150,12 +152,6 @@ videos/
 
 ## Misc
 util/list_sdl_video_drivers
-
-## Datasets
-datasets/
-
-## Model weights and checkpoints
-weights/
 
 ## log files
 *.log
