@@ -156,3 +156,7 @@ datasets/
 
 ## Model weights and checkpoints
 weights/
+
+## log files
+*.log
+*.out
