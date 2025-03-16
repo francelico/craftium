@@ -243,7 +243,7 @@ register(
                 actions=["forward", "backward", "left", "right", "jump", "sneak",
                          "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4",
                          "slot_5", "mouse x+", "mouse x-", "mouse y+", "mouse y-"],
-                mouse_mov=0.2,
+                mouse_mov=0.1,
             ),
         )
     ],

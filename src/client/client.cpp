@@ -1290,7 +1290,6 @@ void Client::ReceiveAll()
 inline void Client::handleCommand(NetworkPacket* pkt)
 {
 	const ToClientCommandHandler& opHandle = toClientCommandTable[pkt->getCommand()];
-	//	printf("\n TEST client.cpp:handleCommand() opHandle.name = %s", opHandle.name);
 	(this->*opHandle.handler)(pkt);
 }
 
@@ -1300,7 +1299,6 @@ inline void Client::handleCommand(NetworkPacket* pkt)
 void Client::ProcessData(NetworkPacket *pkt)
 {
 	ToClientCommand command = (ToClientCommand) pkt->getCommand();
-	//	printf("\n TEST client.cpp:ProcessData() command = %d", static_cast<unsigned>(command));
 
 	m_packetcounter.add(static_cast<u16>(command));
 	g_profiler->graphAdd("client_received_packets", 1);
