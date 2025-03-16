@@ -7,7 +7,6 @@ function rand(lower, greater)
 	return lower + math.random()  * (greater - lower);
 end
 
-DEBUG_PRINT_ON_RESET = true
 SIZE = 10 -- size of the room in blocks
 FLOOR = 4.5
 voxel_radius = {
@@ -28,10 +27,6 @@ reset_environment = function(player)
 	-- Spawn a red block inside the room in a random position
 	target_pos = {x = rand(1, SIZE-1), z = rand(5, SIZE-1), y = 5.5 }
 	minetest.set_node(target_pos, { name = "default:coral_orange" })
-	if DEBUG_PRINT_ON_RESET then
-		voxel_api:print_3d_vector(player:get_pos(), "Player initial pos")
-		voxel_api:print_3d_vector(target_pos, "Target pos")
-	end
 end
 
 -- Executed when the player joins the game
