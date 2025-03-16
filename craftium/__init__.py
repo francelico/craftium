@@ -271,44 +271,6 @@ register(
 )
 
 register(
-    id="Craftium/OpenWorldDataset-v0",
-    entry_point="craftium.craftium_env:CraftiumEnv",
-    additional_wrappers=[
-        WrapperSpec(
-            name="DiscreteActionWrapper",
-            entry_point="craftium.wrappers:DiscreteActionWrapper",
-            kwargs=dict(
-                actions=["forward", "backward", "left", "right", "jump", "sneak",
-                         "dig", "place", "slot_1", "slot_2", "slot_3", "slot_4",
-                         "slot_5", "mouse x+", "mouse x-", "mouse y+", "mouse y-"],
-                mouse_mov=0.1,
-            ),
-        )
-    ],
-    # kwargs
-    kwargs=dict(
-        env_dir=os.path.join(root_path, "craftium-envs/openworld-dataset"),
-        obs_width=320,
-        obs_height=180,
-        max_timesteps=10_000,
-        init_frames=200,
-        game_id="mineclone2",
-        _minetest_conf=dict(
-            max_block_generate_distance=3, # 16x3 blocks
-            mcl_logging_mobs_spawn=True,
-            hud_scaling=0.5,
-            fov=90,
-            console_alpha=0,
-            # Graphics Effects
-            smooth_lighting=False,
-            performance_tradeoffs=True,
-            enable_particles=False,
-        ),
-        _voxel_obs_available=True,
-    )
-)
-
-register(
     id="Craftium/ProcDungeons-v0",
     entry_point="craftium.craftium_env:CraftiumEnv",
     additional_wrappers=[
