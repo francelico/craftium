@@ -1,3 +1,5 @@
+from .minetest import is_minetest_build_dir
+import os
 from .craftium_env import CraftiumEnv
 from .multiagent_env import MarlCraftiumEnv
 from .wrappers import BinaryActionWrapper, DiscreteActionWrapper
@@ -16,9 +18,8 @@ DEFAULT_PROCDUNGEONS_CONF = dict(
     monster_type_d="mobs_monster:mese_monster",
     wall_material="default:steelblock",
     objective_item="default:diamond",
-    rwd_objective=100.0,
-    rwd_kill_monster=1.0,
-    soft_reset=True,
+    rwd_objective=10.0,
+    rwd_kill_monster=0.5,
 )
 
 
@@ -63,9 +64,6 @@ def make_dungeon_env(
 #
 # Environment registrations:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-import os
-from .minetest import is_minetest_build_dir
 
 
 # get the craftium's root directory, where the craftium-envs directory
@@ -159,7 +157,8 @@ register(
             name="DiscreteActionWrapper",
             entry_point="craftium.wrappers:DiscreteActionWrapper",
             kwargs=dict(
-                actions=["forward", "jump", "dig", "mouse x+", "mouse x-", "mouse y+", "mouse y-"],
+                actions=["forward", "jump", "dig", "mouse x+",
+                         "mouse x-", "mouse y+", "mouse y-"],
                 mouse_mov=0.5,
             ),
         )
@@ -300,7 +299,7 @@ register(
             hud_scaling=0.5,
             fov=90,
             console_alpha=0,
-            ### Graphics Effects
+            # Graphics Effects
             smooth_lighting=False,
             performance_tradeoffs=True,
             enable_particles=False,
@@ -330,9 +329,8 @@ register(
         obs_height=64,
         max_timesteps=4000,
         init_frames=200,
+        soft_reset=True,
         _minetest_conf=dict(
-            # secure = {"enable_security": True},
-            soft_reset=True,
             give_initial_stuff=True,
             initial_stuff="default:sword_steel",  # Provide the player with a sword
             performance_tradeoffs=True,
@@ -344,7 +342,7 @@ register(
             wall_material="default:steelblock",
             objective_item="default:diamond",  # item to serve as objective
             rwd_objective=10.0,  # Reward of collecting the objective item
-            rwd_kill_monster=1.0,  # Reward of killing a monster
+            rwd_kill_monster=0.5,  # Reward of killing a monster
             ascii_map="""
 #######
 #######

@@ -69,6 +69,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "craftium.h"
 #include "gui/mainmenumanager.h"
+#include <chrono>
 
 extern gui::IGUIEnvironment* guienv;
 
@@ -208,12 +209,29 @@ void Client::pyConnStep(LocalPlayer *myplayer, float dtime){
     u32 c; // stores the RGBA pixel color
     bool kill;
 
-    frameskip_count++;
+	/* Clear all virtual key presses except the movement ones (WASD) and dig (L click) */
+	for (int i=0; i<KeyType::INTERNAL_ENUM_COUNT; i++) {
+		if (i != KeyType::FORWARD
+				&& i != KeyType::BACKWARD
+				&& i != KeyType::LEFT
+				&& i != KeyType::RIGHT
+				&& i != KeyType::DIG) {
+			virtual_key_presses[i] = false;
+		}
+	}
 
+	// Update and check the frameskip condition
+    frameskip_count++;
     if (frameskip_count != frameskip)
         return;
-
     frameskip_count = 0;
+
+	/* Clear missing virtual key presses (WASD + L click) */
+    virtual_key_presses[KeyType::FORWARD] = false;
+    virtual_key_presses[KeyType::BACKWARD] = false;
+    virtual_key_presses[KeyType::LEFT] = false;
+    virtual_key_presses[KeyType::RIGHT] = false;
+    virtual_key_presses[KeyType::DIG] = false;
 
     /* Take the screenshot */
     irr::video::IVideoDriver *driver = m_rendering_engine->get_video_driver();
@@ -685,8 +703,11 @@ void Client::connect(const Address &address, const std::string &address_name,
 
 void Client::step(float dtime)
 {
-        syncClientStep();
+    syncClientStep();
 
+	dtime -= m_craftium_lag;
+
+	// printf("client dtime: %f, LIM: %f\n", dtime, DTIME_LIMIT);
 	// Limit a bit
 	if (dtime > DTIME_LIMIT)
 		dtime = DTIME_LIMIT;
@@ -698,10 +719,6 @@ void Client::step(float dtime)
 	m_time_of_day_update_timer += dtime;
 
 	ReceiveAll();
-
-        /* Clear virtual key presses */
-        for (int i=0; i<KeyType::INTERNAL_ENUM_COUNT; i++)
-            virtual_key_presses[i] = false;
 
 	/*
 		Packet counter
@@ -803,7 +820,14 @@ void Client::step(float dtime)
 		Handle environment
 	*/
 	LocalPlayer *player = m_env.getLocalPlayer();
-        pyConnStep(player, dtime);
+	auto begin = std::chrono::steady_clock::now();
+    pyConnStep(player, dtime);
+	auto end = std::chrono::steady_clock::now();
+	std::chrono::duration<float> duration = end - begin;
+    float seconds = duration.count();
+	m_craftium_lag = seconds;
+
+	// printf("dtime: %f, delta (lag): %lf\n", dtime, seconds);
 
 	// Step environment (also handles player controls)
 	m_env.step(dtime);

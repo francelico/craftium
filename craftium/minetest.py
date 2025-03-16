@@ -5,6 +5,7 @@ from uuid import uuid4
 import shutil
 import random
 
+
 def is_minetest_build_dir(path: os.PathLike) -> bool:
     # list of directories required by craftium to exist in the a minetest build directory
     req_dirs = ["builtin", "fonts", "locale", "textures", "bin", "client"]
@@ -39,7 +40,7 @@ class Minetest():
             rgb_frames: bool = True,
             sync_mode: bool = False,
             fps_max: int = 200,
-            pmul: Optional[None] = None,
+            pmul: int = 1,
     ):
         self.pipe_proc = pipe_proc
 
@@ -58,10 +59,6 @@ class Minetest():
         print(f"==> Creating Minetest run directory: {self.run_dir}")
 
         port = mt_port if mt_port is not None else random.randint(49152, 65535)
-
-        # set pmul to fps_max by default
-        if pmul is None:
-            pmul = fps_max
 
         config = dict(
             # Base config
@@ -96,13 +93,13 @@ class Minetest():
             # hud_scaling=self.display_size[0] / 1024,
 
             # Physics
-            movement_acceleration_default = 3.0*pmul,
-            movement_acceleration_air = 2.0*pmul,
-            movement_acceleration_fast = 10.0*pmul,
-            movement_speed_walk = 4.0*pmul,
-            movement_speed_crouch = 1.35*pmul,
-            movement_speed_fast = 20.0*pmul,
-            movement_speed_climb = 3.0*pmul,
+            movement_acceleration_default=3.0*pmul,
+            movement_acceleration_air=2.0*pmul,
+            movement_acceleration_fast=10.0*pmul,
+            movement_speed_walk=4.0*pmul,
+            movement_speed_crouch=1.35*pmul,
+            movement_speed_fast=20.0*pmul,
+            movement_speed_climb=3.0*pmul,
 
             # Attempt to improve performance. Impact unclear.
             server_map_save_interval=1000000,
@@ -145,7 +142,8 @@ class Minetest():
             root_path = minetest_dir
 
         # create the directory tree structure needed by minetest
-        self._create_mt_dirs(root_dir=root_path, target_dir=self.run_dir, sync_dir=sync_dir)
+        self._create_mt_dirs(root_dir=root_path,
+                             target_dir=self.run_dir, sync_dir=sync_dir)
 
         # compose the launch command
         self.launch_cmd = [
@@ -226,6 +224,7 @@ class Minetest():
         def link_dir(name):
             os.symlink(os.path.join(root_dir, name),
                        os.path.join(target_dir, name))
+
         def copy_dir(name):
             shutil.copytree(os.path.join(root_dir, name),
                             os.path.join(target_dir, name),
@@ -245,10 +244,11 @@ class Minetest():
                 tgt = os.path.join(target_dir, item)
                 if os.path.isfile(item):  # if it's a file
                     shutil.copy(src, tgt)
-                else: # is a directory
+                else:  # is a directory
                     shutil.copytree(src, tgt, dirs_exist_ok=True)
         else:
-            print("* WARNING: `sync_dir` not given, copying worlds and games dirs from craftium installation dir")
+            print(
+                "* WARNING: `sync_dir` not given, copying worlds and games dirs from craftium installation dir")
             copy_dir("worlds")
             copy_dir("games")
 
@@ -267,7 +267,7 @@ class MTServerOnly():
             mt_server_port: Optional[int] = None,
             sync_mode: bool = False,
             fps_max: int = 200,
-            pmul: Optional[int] = None,
+            pmul: int = 1,
     ):
         self.pipe_proc = pipe_proc
 
@@ -282,11 +282,8 @@ class MTServerOnly():
 
         print(f"==> Creating Minetest (server) run directory: {self.run_dir}")
 
-        self.server_port = mt_server_port if mt_server_port is not None else random.randint(49152, 65535)
-
-        if pmul is None:
-            pmul = int(fps_max / 50)
-        pmul = max(1, pmul)  # should at least be 1
+        self.server_port = mt_server_port if mt_server_port is not None else random.randint(
+            49152, 65535)
 
         config = dict(
             # Base config
@@ -333,7 +330,6 @@ class MTServerOnly():
             emergequeue_limit_diskonly=1000000,
             emergequeue_limit_generate=1000000,
         )
-
         # overwrite config settings with those set via minetest_conf
         for key, value in minetest_conf.items():
             config[key] = value
@@ -357,7 +353,8 @@ class MTServerOnly():
             root_path = minetest_dir
 
         # create the directory tree structure needed by minetest
-        self._create_mt_dirs(root_dir=root_path, target_dir=self.run_dir, sync_dir=sync_dir)
+        self._create_mt_dirs(root_dir=root_path,
+                             target_dir=self.run_dir, sync_dir=sync_dir)
 
         # compose the launch command
         self.launch_cmd = [
@@ -432,6 +429,7 @@ class MTServerOnly():
         def link_dir(name):
             os.symlink(os.path.join(root_dir, name),
                        os.path.join(target_dir, name))
+
         def copy_dir(name):
             shutil.copytree(os.path.join(root_dir, name),
                             os.path.join(target_dir, name),
@@ -451,10 +449,11 @@ class MTServerOnly():
                 tgt = os.path.join(target_dir, item)
                 if os.path.isfile(item):  # if it's a file
                     shutil.copy(src, tgt)
-                else: # is a directory
+                else:  # is a directory
                     shutil.copytree(src, tgt, dirs_exist_ok=True)
         else:
-            print("* WARNING: `sync_dir` not given, copying worlds and games dirs from craftium installation dir")
+            print(
+                "* WARNING: `sync_dir` not given, copying worlds and games dirs from craftium installation dir")
             copy_dir("worlds")
             copy_dir("games")
 
@@ -482,7 +481,7 @@ class MTClientOnly():
             rgb_frames: bool = True,
             sync_mode: bool = False,
             fps_max: int = 200,
-            pmul: Optional[int] = None,
+            pmul: int = 1,
     ):
         self.pipe_proc = pipe_proc
 
@@ -496,10 +495,6 @@ class MTClientOnly():
         os.mkdir(self.run_dir)
 
         print(f"==> Creating Minetest run directory: {self.run_dir}")
-
-        if pmul is None:
-            pmul = int(fps_max / 50)
-        pmul = max(1, pmul)  # should at least be 1
 
         config = dict(
             # Base config
@@ -580,7 +575,8 @@ class MTClientOnly():
             root_path = minetest_dir
 
         # create the directory tree structure needed by minetest
-        self._create_mt_dirs(root_dir=root_path, target_dir=self.run_dir, sync_dir=sync_dir)
+        self._create_mt_dirs(root_dir=root_path,
+                             target_dir=self.run_dir, sync_dir=sync_dir)
 
         # compose the launch command
         self.launch_cmd = [
@@ -653,6 +649,7 @@ class MTClientOnly():
         def link_dir(name):
             os.symlink(os.path.join(root_dir, name),
                        os.path.join(target_dir, name))
+
         def copy_dir(name):
             shutil.copytree(os.path.join(root_dir, name),
                             os.path.join(target_dir, name),
@@ -672,9 +669,10 @@ class MTClientOnly():
                 tgt = os.path.join(target_dir, item)
                 if os.path.isfile(item):  # if it's a file
                     shutil.copy(src, tgt)
-                else: # is a directory
+                else:  # is a directory
                     shutil.copytree(src, tgt, dirs_exist_ok=True)
         else:
-            print("* WARNING: `sync_dir` not given, copying worlds and games dirs from craftium installation dir")
+            print(
+                "* WARNING: `sync_dir` not given, copying worlds and games dirs from craftium installation dir")
             copy_dir("worlds")
             copy_dir("games")
