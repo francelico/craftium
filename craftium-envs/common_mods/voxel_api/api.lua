@@ -23,8 +23,7 @@ end
 
 -- Global
 function voxel_api:get_voxel_data(pos, radius)
-	--local vm = VoxelManip()
-	vm = core.get_mapgen_object("voxelmanip")
+	local vm = VoxelManip()  --vm = core.get_mapgen_object("voxelmanip")
 	pos = vector.round(pos)
 	local p1 = vector.subtract(pos, radius)
 	local p2 = vector.add(pos, radius)
