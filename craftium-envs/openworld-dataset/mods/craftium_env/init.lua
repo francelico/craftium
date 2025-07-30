@@ -52,29 +52,36 @@ minetest.register_globalstep(function(dtime)
 		return nil
 	end
 
-	-- disable HUD elements todo: make this a function
+	-- disable HUD elements todo: make this a function --UNCOMMENT TO REMOVE ALL HUD
+-- 	player:hud_set_flags({
+-- 		crosshair = false,
+-- 		basic_debug = false,
+-- 		chat = false,
+-- 		wielditem = false,
+-- 		hotbar = false,
+-- 		healthbar = false,
+-- 		breathbar = false,
+-- 	})
+-- 	if hb then
+-- 		hb.hide_hudbar(player, "health")
+-- 		hb.hide_hudbar(player, "breath")
+-- 		hb.hide_hudbar(player, "armor")
+-- 		hb.hide_hudbar(player, "hunger")
+-- 		hb.hide_hudbar(player, "exhaustion")
+-- 		hb.hide_hudbar(player, "saturation")
+-- 		hb.hide_hudbar(player, "progress_bar")
+-- 		hb.hide_hudbar(player, "absorption")
+-- 	end
+-- 	if mcl_experience then
+-- 		mcl_experience.remove_hud(player)
+-- 	end
+
+	-- disable HUD elements -- normal HUD todo: check moving up in script
 	player:hud_set_flags({
 		crosshair = false,
 		basic_debug = false,
 		chat = false,
-		wielditem = false,
-		hotbar = false,
-		healthbar = false,
-		breathbar = false,
 	})
-	if hb then
-		hb.hide_hudbar(player, "health")
-		hb.hide_hudbar(player, "breath")
-		hb.hide_hudbar(player, "armor")
-		hb.hide_hudbar(player, "hunger")
-		hb.hide_hudbar(player, "exhaustion")
-		hb.hide_hudbar(player, "saturation")
-		hb.hide_hudbar(player, "progress_bar")
-		hb.hide_hudbar(player, "absorption")
-	end
-	if mcl_experience then
-		mcl_experience.remove_hud(player)
-	end
 
 	-- if the player is connected:
 	local player_pos = player:get_pos()

@@ -6,7 +6,7 @@ DEBUG = false
 DEBUG_PRINT_ONCE = DEBUG
 
 local function print_array_from_pos(array, minp, maxp, vox_area)
-	str = ""
+	local str = ""
 	for z = minp.z, maxp.z do
 		for y = minp.y, maxp.y do
 			local vi = vox_area:index(minp.x, y, z)
@@ -23,8 +23,7 @@ end
 
 -- Global
 function voxel_api:get_voxel_data(pos, radius)
-	local vm = VoxelManip()
-	-- vm = core.get_mapgen_object("voxelmanip")
+	local vm = VoxelManip()  --vm = core.get_mapgen_object("voxelmanip")
 	pos = vector.round(pos)
 	local p1 = vector.subtract(pos, radius)
 	local p2 = vector.add(pos, radius)
