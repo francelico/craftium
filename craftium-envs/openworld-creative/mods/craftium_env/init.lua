@@ -1,0 +1,70 @@
+if minetest.settings:has("fixed_map_seed") then
+	math.randomseed(minetest.settings:get("fixed_map_seed"))
+	minetest.set_mapgen_setting("seed", minetest.settings:get("fixed_map_seed"), true)
+	minetest.log("action", "Overriding World seed = " .. minetest.get_mapgen_setting("seed"))
+end
+
+voxel_radius = {
+	x = minetest.settings:get("voxel_obs_rx"),
+	y = minetest.settings:get("voxel_obs_ry"),
+	z = minetest.settings:get("voxel_obs_rz")
+}
+
+-- names of the items included in the initial inventory
+init_inv = { "mcl_core:stone" }
+
+timeofday_step = 1 / 5000 -- day/night cycle lasts 5000 steps
+timeofday = tonumber(minetest.settings:get("world_start_time"))/24000
+
+-- executed when the player joins the game
+minetest.register_on_joinplayer(function(player, _last_login)
+
+	-- set the player's view to the next yaw
+	player:set_look_vertical(math.rad(math.random(-20, 20)))
+	player:set_look_horizontal(math.rad(math.random(0, 360)))
+
+	-- setup initial inventory
+	local inv = player:get_inventory()
+	for i=1, #init_inv do
+		inv:add_item("main", init_inv[i])
+	end
+
+end)
+
+-- turn on the termination flag if the agent dies
+minetest.register_on_dieplayer(function(ObjectRef, reason)
+	set_termination()
+end)
+
+-- make game's time match with learning timesteps
+minetest.register_globalstep(function(dtime)
+
+	if timeofday > 1.0 then
+		timeofday = 0.0
+	end
+	minetest.set_timeofday(timeofday)
+	timeofday = timeofday + timeofday_step
+
+	local player = minetest.get_connected_players()[1]
+
+	-- if the player is not connected end here
+	if player == nil then
+		return nil
+	end
+
+	-- disable HUD elements -- normal HUD todo: check moving up in script
+	player:hud_set_flags({
+		crosshair = false,
+		basic_debug = false,
+		chat = false,
+	})
+
+	-- if the player is connected:
+	local player_pos = player:get_pos()
+	if minetest.settings:get("voxel_obs") then
+		local voxel_data, voxel_light_data, voxel_param2_data = voxel_api:get_voxel_data(player_pos, voxel_radius)
+		set_voxel_data(voxel_data)
+		set_voxel_light_data(voxel_light_data)
+		set_voxel_param2_data(voxel_param2_data)
+	end
+end)
