@@ -62,9 +62,6 @@ minetest.register_globalstep(function(dtime)
 	-- if the player is connected:
 	local player_pos = player:get_pos()
 	if minetest.settings:get("voxel_obs") then
-		local voxel_data, voxel_light_data, voxel_param2_data = voxel_api:get_voxel_data(player_pos, voxel_radius)
-		set_voxel_data(voxel_data)
-		set_voxel_light_data(voxel_light_data)
-		set_voxel_param2_data(voxel_param2_data)
+		get_voxel_data_cpp(player_pos, voxel_radius)
 	end
 end)

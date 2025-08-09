@@ -31,25 +31,36 @@ class MtChannel():
         self.connfd = None
 
         # pre-compute the number of bytes that we should receive from MT.
-        # the RGB image + 8 bytes of the reward + 1 of the soft-reset flag
+        # - img_width*img_height*self.n_chan bytes for the RGB image
+        # - 32 bytes (8 x 4 bytes) for the player position (x, y, z) [3x4], velocity (vx, vy, vz) [3x4], pitch [4], yaw[4]
+        # - 32 bytes (8 x 4 bytes) for the camera position (x, y, z) [3x4], direction (vx, vy, vz) [3x4], fovx [4], fovy[4]
+        # - 6 bytes for the voxel observation center (x, y, z) [3x2]
+        # - 4 bytes for the delta time (float32)
+        # - 8 bytes for the reward (float64)
+        # - 1 byte for the soft-reset flag (0 or 1)
+        # - voxel_obs_dx*voxel_obs_dy*voxel_obs_dz*self.n_vox_chan*4 bytes for the voxel observation
         self.n_chan = 3 if rgb_imgs else 1
-        self.n_vox_chan = 3 if voxel_obs else 0
-        self.rec_bytes = (img_width*img_height*self.n_chan + 32 + 4 + 8 + 1
+        self.n_vox_chan = 2 if voxel_obs else 0
+        self.rec_bytes = (img_width*img_height*self.n_chan + 6 + 32 + 32 + 4 + 8 + 1
                           + self.voxel_obs_dx*self.voxel_obs_dy*self.voxel_obs_dz*self.n_vox_chan*4)
 
     def receive(self):
-        img, vox_obs, pos, vel, pitch, yaw, dtime, reward, termination = mt_server.server_recv(
-            self.connfd,
-            self.rec_bytes,
-            self.img_width,
-            self.img_height,
-            self.n_chan,
-            self.n_vox_chan,
-            self.voxel_obs_dx,
-            self.voxel_obs_dy,
-            self.voxel_obs_dz,
-        )
-        return img, vox_obs, pos/1000., vel/1000., pitch/100., yaw/100., dtime, reward, termination # pos,vel / 1000 to match 1 unit = 1 node.
+        img, vox_obs, vox_center, pos, vel, pitch, yaw, cam_pos, cam_dir, fov_x, fov_y, dtime, reward, termination = (
+            mt_server.server_recv(
+                self.connfd,
+                self.rec_bytes,
+                self.img_width,
+                self.img_height,
+                self.n_chan,
+                self.n_vox_chan,
+                self.voxel_obs_dx,
+                self.voxel_obs_dy,
+                self.voxel_obs_dz,
+        ))
+        return (img, vox_obs, vox_center,
+                pos/1000., vel/1000., pitch/100., (yaw/100.) % 360,
+                cam_pos/1000., cam_dir/1000, fov_x/100, fov_y/100,
+                dtime, reward, termination) # pos,vel,dir / 1000 to match 1 unit = 1 node.
 
     def send(self, keys: list[int], mouse_x: int, mouse_y: int, soft_reset: bool = False, kill: bool = False):
         assert len(keys) == 21, f"Keys list must be of length 21 and is {len(keys)}"

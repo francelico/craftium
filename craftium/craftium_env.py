@@ -246,12 +246,16 @@ class CraftiumEnv(Env):
             # HACK skip some frames to let the game initialize
             # TODO This "waiting" should be implemented in Minetest not in python
             for _ in range(self.init_frames):
-                _observation, _voxobs, _pos, _vel, _pitch, _yaw, _dtime, _reward, _term = self.mt_chann.receive()
-                self.mt_chann.send([0]*21, 0, 0)  # nop action
+                (_observation, _voxobs, _vox_center, _pos, _vel, _pitch, _yaw,
+                 _cam_pos, _cam_dir, _fov_x, _fov_y,
+                 _dtime, _reward, _term) = self.mt_chann.receive()
+                # making the agent look around ensures the level loads properly
+                self.mt_chann.send([0]*21, int(0.25*(self.obs_width // 2)), 0)
         else:
             self.mt_chann.send_soft_reset()
 
-        observation, voxobs, pos, vel, pitch, yaw, dtime, _reward, _term = self.mt_chann.receive()
+        (observation, voxobs, vox_center, pos, vel, pitch, yaw,
+         cam_pos, cam_dir, fov_x, fov_y, dtime, _reward, _term) = self.mt_chann.receive()
         if not self.gray_scale_keepdim and not self.rgb_observations:
             observation = observation[:, :, 0]
 
@@ -259,10 +263,15 @@ class CraftiumEnv(Env):
 
         info = self._get_info()
         info["voxel_obs"] = voxobs
+        info["voxel_obs_center"] = vox_center
         info["player_pos"] = pos
         info["player_vel"] = vel
         info["player_pitch"] = pitch
         info["player_yaw"] = yaw
+        info["cam_pos"] = cam_pos
+        info["cam_dir"] = cam_dir
+        info["cam_fov_x"] = fov_x
+        info["cam_fov_y"] = fov_y
         info["mt_dtime"] = dtime
 
         return observation, info
@@ -317,7 +326,8 @@ class CraftiumEnv(Env):
         self.mt_chann.send(keys, mouse_x, mouse_y)
 
         # receive the new info from minetest
-        observation, voxobs, pos, vel, pitch, yaw, dtime, reward, termination = self.mt_chann.receive()
+        (observation, voxobs, vox_center, pos, vel, pitch, yaw,
+         cam_pos, cam_dir, fov_x, fov_y, dtime, reward, termination) = self.mt_chann.receive()
         if not self.gray_scale_keepdim and not self.rgb_observations:
             observation = observation[:, :, 0]
 
@@ -325,10 +335,15 @@ class CraftiumEnv(Env):
 
         info = self._get_info()
         info["voxel_obs"] = voxobs
+        info["voxel_obs_center"] = vox_center
         info["player_pos"] = pos
         info["player_vel"] = vel
         info["player_pitch"] = pitch
         info["player_yaw"] = yaw
+        info["cam_pos"] = cam_pos
+        info["cam_dir"] = cam_dir
+        info["cam_fov_x"] = fov_x
+        info["cam_fov_y"] = fov_y
         info["mt_dtime"] = dtime
 
         truncated = self.max_timesteps is not None and self.timesteps >= self.max_timesteps

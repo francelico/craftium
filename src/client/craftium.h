@@ -175,6 +175,7 @@ inline bool g_soft_reset = false; /* Global variable with the termination flag *
 inline std::vector<uint32_t> g_voxel_data = std::vector<uint32_t>(1,0);
 inline std::vector<uint32_t> g_voxel_light_data = std::vector<uint32_t>(1,0);
 inline std::vector<uint32_t> g_voxel_param2_data = std::vector<uint32_t>(1,0);
+inline v3s16 g_voxel_center = {0, 0, 0};
 
 extern "C" {
 #include <lualib.h>

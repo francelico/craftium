@@ -492,7 +492,7 @@ private:
         struct sockaddr_in *py_servaddr = nullptr;
         unsigned char *obs_rwd_buffer = 0;
         void startPyConn();
-        void pyConnStep(LocalPlayer *player, float dtime);
+        void pyConnStep(LocalPlayer *player, Camera *camera, float dtime);
 
 	std::unique_ptr<MeshUpdateManager> m_mesh_update_manager;
 	ClientEnvironment m_env;

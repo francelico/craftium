@@ -182,10 +182,11 @@ int read_large_from_socket(int socket_fd, char *buffer, int total_size) {
 
 static PyObject* server_recv(PyObject* self, PyObject* args) {
   int connfd, n_bytes, obs_width, obs_height, n_read, n_channels, n_vox_channels, voxel_x, voxel_y, voxel_z;
-  float dtime;
+  float dtime, fov_x, fov_y;
   double reward;
   int32_t yaw, pitch;
   char *buff;
+  npy_intp dims_v3f[1] = {3};
 
   if (!PyArg_ParseTuple(args, "iiiiiiiii", &connfd, &n_bytes, &obs_width, &obs_height, &n_channels, &n_vox_channels, &voxel_x, &voxel_y, &voxel_z)) {
     PyErr_SetString(PyExc_TypeError,
@@ -224,18 +225,34 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
   memcpy(&dtime, &buff[n_bytes-13], sizeof(dtime));
   PyObject* py_dtime = PyFloat_FromDouble((double)dtime);
 
-  // Retrieve backwards the yaw [4], pitch [4], velocity [12] and position [12] = 32 bytes
+  // Retrieve backwards the camera info: fov_y [4], fov_x [4], camera direction [12] and position [12] = 32 bytes
+  float* array_cam_pos_data = (float*)malloc(3 * sizeof(float));
+  float* array_cam_dir_data = (float*)malloc(3 * sizeof(float));
+  memcpy(&fov_y, &buff[n_bytes-17], sizeof(float));
+  memcpy(&fov_x, &buff[n_bytes-21], sizeof(float));
+  memcpy(array_cam_dir_data, &buff[n_bytes-33], 3 * sizeof(float));
+  memcpy(array_cam_pos_data, &buff[n_bytes-45], 3 * sizeof(float));
+  PyObject* pyarray_cam_pos = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_cam_pos_data);
+  PyObject* pyarray_cam_dir = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_cam_dir_data);
+  PyObject* py_fov_x = PyFloat_FromDouble((double)fov_x);
+  PyObject* py_fov_y = PyFloat_FromDouble((double)fov_y);
+
+  // Retrieve backwards the yaw [4], pitch [4], velocity [12] and position [12] = 32 bytes (now offset by 6 bytes)
   float* array_pos_data = (float*)malloc(3 * sizeof(float));
   float* array_vel_data = (float*)malloc(3 * sizeof(float));
-  memcpy(&yaw, &buff[n_bytes-17], sizeof(int32_t));
-  memcpy(&pitch, &buff[n_bytes-21], sizeof(int32_t));
-  memcpy(array_vel_data, &buff[n_bytes-33], 3 * sizeof(float));
-  memcpy(array_pos_data, &buff[n_bytes-45], 3 * sizeof(float));
-  npy_intp dims_v3f[1] = {3};
+  memcpy(&yaw, &buff[n_bytes-49], sizeof(int32_t));
+  memcpy(&pitch, &buff[n_bytes-53], sizeof(int32_t));
+  memcpy(array_vel_data, &buff[n_bytes-65], 3 * sizeof(float));
+  memcpy(array_pos_data, &buff[n_bytes-77], 3 * sizeof(float));
   PyObject* pyarray_pos = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_pos_data);
   PyObject* pyarray_vel = PyArray_SimpleNewFromData(1, dims_v3f, NPY_FLOAT32, array_vel_data);
   PyObject* py_pitch = PyLong_FromSsize_t(pitch);
   PyObject* py_yaw = PyLong_FromSsize_t(yaw);
+
+  // Retrieve backwards the voxel center (v3s16 = 6 bytes)
+  int16_t* array_voxel_center_data = (int16_t*)malloc(3 * sizeof(int16_t));
+  memcpy(array_voxel_center_data, &buff[n_bytes-83], 3 * sizeof(int16_t));
+  PyObject* pyarray_voxel_center = PyArray_SimpleNewFromData(1, dims_v3f, NPY_INT16, array_voxel_center_data);
 
   // Create separate memory allocations for the RGB and voxel data
   char* array_rgb_data = (char*)malloc(obs_height * obs_width * n_channels);
@@ -247,6 +264,9 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
     free(array_vox_data);
     free(array_pos_data);
     free(array_vel_data);
+    free(array_cam_pos_data);
+    free(array_cam_dir_data);
+    free(array_voxel_center_data);
     Py_XDECREF(py_termination);
     Py_XDECREF(py_reward);
     Py_XDECREF(py_dtime);
@@ -254,6 +274,11 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
     Py_XDECREF(pyarray_vel);
     Py_XDECREF(py_pitch);
     Py_XDECREF(py_yaw);
+    Py_XDECREF(py_fov_x);
+    Py_XDECREF(py_fov_y);
+	Py_XDECREF(pyarray_cam_pos);
+	Py_XDECREF(pyarray_cam_dir);
+	Py_XDECREF(pyarray_voxel_center);
     PyErr_SetString(PyExc_Exception, "Failed to allocate memory for array data");
     return NULL;
   }
@@ -277,6 +302,11 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
   if (!pyarray_rgb || !pyarray_vox) {
     free(array_rgb_data);
     free(array_vox_data);
+    free(array_pos_data);
+    free(array_vel_data);
+    free(array_cam_pos_data);
+    free(array_cam_dir_data);
+    free(array_voxel_center_data);
     Py_XDECREF(pyarray_rgb);
     Py_XDECREF(pyarray_vox);
     Py_XDECREF(py_termination);
@@ -286,6 +316,11 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
     Py_XDECREF(pyarray_vel);
     Py_XDECREF(py_pitch);
     Py_XDECREF(py_yaw);
+    Py_XDECREF(py_fov_x);
+    Py_XDECREF(py_fov_y);
+	Py_XDECREF(pyarray_cam_pos);
+	Py_XDECREF(pyarray_cam_dir);
+	Py_XDECREF(pyarray_voxel_center);
     PyErr_SetString(PyExc_RuntimeError, "Failed to create NumPy array");
     return NULL;
   }
@@ -295,8 +330,11 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
   PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_vel, NPY_ARRAY_OWNDATA);
   PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_rgb, NPY_ARRAY_OWNDATA);
   PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_vox, NPY_ARRAY_OWNDATA);
+  PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_cam_pos, NPY_ARRAY_OWNDATA);
+  PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_cam_dir, NPY_ARRAY_OWNDATA);
+  PyArray_ENABLEFLAGS((PyArrayObject*)pyarray_voxel_center, NPY_ARRAY_OWNDATA);
 
-  PyObject* tuple = PyTuple_Pack(9, pyarray_rgb, pyarray_vox, pyarray_pos, pyarray_vel, py_pitch, py_yaw, py_dtime, py_reward, py_termination);
+  PyObject* tuple = PyTuple_Pack(14, pyarray_rgb, pyarray_vox, pyarray_voxel_center, pyarray_pos, pyarray_vel, py_pitch, py_yaw, pyarray_cam_pos, pyarray_cam_dir, py_fov_x, py_fov_y, py_dtime, py_reward, py_termination);
 
   // Safe to DECREF everything as tuple has increased their reference counts
   Py_DECREF(py_reward);
@@ -306,8 +344,13 @@ static PyObject* server_recv(PyObject* self, PyObject* args) {
   Py_DECREF(pyarray_vel);
   Py_DECREF(py_pitch);
   Py_DECREF(py_yaw);
+  Py_DECREF(pyarray_cam_pos);
+  Py_DECREF(pyarray_cam_dir);
+  Py_DECREF(py_fov_x);
+  Py_DECREF(py_fov_y);
   Py_DECREF(pyarray_rgb);
   Py_DECREF(pyarray_vox);
+  Py_DECREF(pyarray_voxel_center);
 
   return tuple;
 }

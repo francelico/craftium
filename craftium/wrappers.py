@@ -156,8 +156,12 @@ class NueToEnuVoxelObs(Wrapper):
         # NUEC -> ENUC
         info["voxel_obs"] = info["voxel_obs"].transpose(2, 0, 1, 3)
         # (3[nue],) -> (3[enu],)
+        info["voxel_obs_center"] = info["voxel_obs_center"][[2, 0, 1]]
         info["player_pos"] = info["player_pos"][[2, 0, 1]]
         info["player_vel"] = info["player_vel"][[2, 0, 1]]
+        info["cam_pos"] = info["cam_pos"][[2, 0, 1]]
+        info["cam_dir"] = info["cam_dir"][[2, 0, 1]]
+        # negate yaw and pitch to match ENU coordinate system
         info["player_yaw"] = -info["player_yaw"]
         info["player_pitch"] = -info["player_pitch"]
         return info
@@ -166,7 +170,11 @@ class NueToEnuVoxelObs(Wrapper):
         # need to account for the batch dimension, so BNUEC -> BENUC
         info["voxel_obs"] = info["voxel_obs"].transpose(0, 3, 1, 2, 4)
         # (B, 3[nue]) -> (B, 3[enu])
+        info["voxel_obs_center"] = info["voxel_obs_center"][:, [2, 0, 1]]
         info["player_pos"] = info["player_pos"][:, [2, 0, 1]]
         info["player_vel"] = info["player_vel"][:, [2, 0, 1]]
-        info["player_yaw"] = (info["player_yaw"] + 90) % 360
+        info["cam_pos"] = info["cam_pos"][:, [2, 0, 1]]
+        info["cam_dir"] = info["cam_dir"][:, [2, 0, 1]]
+        info["player_yaw"] = -info["player_yaw"]
+        info["player_pitch"] = -info["player_pitch"]
         return info

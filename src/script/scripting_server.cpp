@@ -32,12 +32,89 @@
 #include "lua_api/l_http.h"
 #include "lua_api/l_storage.h"
 #include "lua_api/l_ipc.h"
+#include "common/c_converter.h"
+#include "common/c_content.h"
+#include "serverenvironment.h"
 
 extern "C" {
 #include <lualib.h>
 }
 
 #include "../client/craftium.h"
+
+// Implementation of the C++ voxel data function
+// todo: make a version of this function that is directly in client.cpp
+inline static int lua_get_voxel_data_cpp(lua_State* L) {
+	try {
+		// Get function arguments: player_pos (table), radius (table)
+		if (!lua_istable(L, 1) || !lua_istable(L, 2)) {
+			throw std::runtime_error("Expected table arguments for player_pos and radius");
+		}
+
+		// Extract player position
+		lua_getfield(L, 1, "x");
+		lua_getfield(L, 1, "y");
+		lua_getfield(L, 1, "z");
+		v3f player_pos(lua_tonumber(L, -3), lua_tonumber(L, -2), lua_tonumber(L, -1));
+		lua_pop(L, 3);
+
+		// Extract radius
+		lua_getfield(L, 2, "x");
+		lua_getfield(L, 2, "y");
+		lua_getfield(L, 2, "z");
+		v3f radius(lua_tonumber(L, -3), lua_tonumber(L, -2), lua_tonumber(L, -1));
+		lua_pop(L, 3);
+
+		// Get the server environment
+		Environment* env = ModApiBase::getEnv(L);
+		if (!env) {
+			throw std::runtime_error("Could not get server environment");
+		}
+
+		ServerEnvironment* server_env = dynamic_cast<ServerEnvironment*>(env);
+		if (!server_env) {
+			throw std::runtime_error("Environment is not a server environment");
+		}
+
+		// Calculate bounds
+		v3s16 p1 = floatToInt(player_pos - radius, 1);
+		v3s16 p2 = floatToInt(player_pos + radius, 1);
+
+		// Create VoxelManip and read from map
+		MMVManip vm(&server_env->getServerMap());
+		vm.initialEmerge(getNodeBlockPos(p1), getNodeBlockPos(p2));
+
+		// Get both data arrays atomically from the same VoxelManip instance
+		const u32 volume = vm.m_area.getVolume();
+		std::vector<uint32_t> voxel_data;
+		std::vector<uint32_t> voxel_param2_data;
+
+		voxel_data.reserve(volume);
+		voxel_param2_data.reserve(volume);
+
+		// Single loop to extract both data types atomically
+		for (u32 i = 0; i < volume; i++) {
+			if (vm.m_flags[i] & VOXELFLAG_NO_DATA) {
+				voxel_data.push_back(CONTENT_IGNORE);
+				voxel_param2_data.push_back(0);
+			} else {
+				voxel_data.push_back(vm.m_data[i].getContent());
+				voxel_param2_data.push_back(vm.m_data[i].getParam2());
+			}
+		}
+
+		// Store in global variables atomically
+		g_voxel_data = std::move(voxel_data);
+		g_voxel_param2_data = std::move(voxel_param2_data);
+		g_voxel_center = floatToInt(player_pos, 1);
+
+		return 0;
+	} catch (const std::exception& e) {
+		lua_pushstring(L, e.what());
+		lua_error(L);
+		return 0;
+	}
+}
 
 ServerScripting::ServerScripting(Server* server):
 		ScriptApiBase(ScriptingType::Server),
@@ -78,6 +155,7 @@ ServerScripting::ServerScripting(Server* server):
         lua_register(L, "set_voxel_data", lua_set_voxel_data);
         lua_register(L, "set_voxel_light_data", lua_set_voxel_light_data);
         lua_register(L, "set_voxel_param2_data", lua_set_voxel_param2_data);
+        lua_register(L, "get_voxel_data_cpp", lua_get_voxel_data_cpp);
 
 	// Initialize our lua_api modules
 	InitializeModApi(L, top);

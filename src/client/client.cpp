@@ -192,7 +192,7 @@ void Client::startPyConn()
     printf("\n[INFO] PyConn started in port %d\n\n", py_port);
 }
 
-void Client::pyConnStep(LocalPlayer *myplayer, float dtime){
+void Client::pyConnStep(LocalPlayer *myplayer, Camera *mycamera, float dtime){
     // NOTE: the `actions` array is defined in craftium.h
     int n_send, n_recv, W, H, Xv, Yv, Zv, obs_rwd_buffer_size;
     u32 c; // stores the RGBA pixel color
@@ -241,18 +241,18 @@ void Client::pyConnStep(LocalPlayer *myplayer, float dtime){
       W*H*3 for the WxH RGB image, +8 for the reward value (a double),
       and +1 for the episode termination flag
     */
-    // [RGB, (pos,vel,pitch,yaw), dtime, reward, termination]
+    // [RGB, voxel_obs, voxel_center, (pos,vel,pitch,yaw), (cam_pos,cam_dir,fov_x,fov_y), dtime, reward, termination]
     if (g_settings->getBool("rgb_frames")) {
-        obs_rwd_buffer_size = W*H*3 + 32 + 4 + 8 + 1; // full RGB images
+        obs_rwd_buffer_size = W*H*3 + 6 + 32 + 32 + 4 + 8 + 1; // full RGB images + voxel_center
     } else {
-        obs_rwd_buffer_size = W*H + 32 + 4 + 8 + 1; // grayscale images
+        obs_rwd_buffer_size = W*H + 6 + 32 + 32 + 4 + 8 + 1; // grayscale images + voxel_center
     }
 
 	Xv = 2 * g_settings->getU32("voxel_obs_rx") + 1;
 	Yv = 2 * g_settings->getU32("voxel_obs_ry") + 1;
 	Zv = 2 * g_settings->getU32("voxel_obs_rz") + 1;
 	if (g_settings->getBool("voxel_obs")) {
-        obs_rwd_buffer_size += Xv*Yv*Zv*3*4; // voxel observation
+        obs_rwd_buffer_size += Xv*Yv*Zv*2*4; // voxel observation
 	}
 
     /* If obs_rwd_buffer is not initialized, allocate memory for it now */
@@ -285,28 +285,39 @@ void Client::pyConnStep(LocalPlayer *myplayer, float dtime){
         }
     }
 
+    // camera position, direction, fov : 32 bytes
+	v3f camera_pos = mycamera->getPosition() * 100; // 12 bytes
+	v3f camera_dir = mycamera->getDirection() * 100; // 12 bytes
+	f32 fov_x = mycamera->getFovX() * 100; // 4 bytes
+	f32 fov_y = mycamera->getFovY() * 100; // 4 bytes
+
     if (g_settings->getBool("voxel_obs")) {
-		/* Encode the voxel observation as 3 arrays,
-		VoxelManip:get_data(), VoxelManip:get_light_data(), VoxelManip:get_param2_data() */
 		int j = 0;
 		for (int z=0; z<Zv; z++) {
 			for (int y=0; y<Yv; y++) {
 				for (int x=0; x<Xv; x++) {
                     memcpy(&obs_rwd_buffer[i], &g_voxel_data[j], sizeof(uint32_t));
-                    memcpy(&obs_rwd_buffer[i+4], &g_voxel_light_data[j], sizeof(uint32_t));
-                    memcpy(&obs_rwd_buffer[i+8], &g_voxel_param2_data[j], sizeof(uint32_t));
-                    i = i + 12; // Advance by 12 bytes (3 * sizeof(uint32_t))
+                    memcpy(&obs_rwd_buffer[i+4], &g_voxel_param2_data[j], sizeof(uint32_t));
+                    i = i + 8; // Advance by 8 bytes (2 * sizeof(uint32_t))
 					j++;
 				}
 			}
 		}
 	}
 
-	// Encode the player position (3 floats), velocity (3 floats), pitch (1 u32), yaw (1 u32)
-	v3f pf           = myplayer->getPosition() * 100;
-	v3f sf           = myplayer->getSpeed() * 100;
-	s32 pitch        = myplayer->getPitch() * 100;
-	s32 yaw          = myplayer->getYaw() * 100;
+	// Encode the voxel center (v3s16 = 6 bytes)
+	memcpy(&obs_rwd_buffer[i], &g_voxel_center.X, sizeof(s16));
+	memcpy(&obs_rwd_buffer[i+2], &g_voxel_center.Y, sizeof(s16));
+	memcpy(&obs_rwd_buffer[i+4], &g_voxel_center.Z, sizeof(s16));
+	i = i + 6;
+
+	// Encode the player position and camera data
+	// player position : 32 bytes
+	v3f pf           = myplayer->getPosition() * 100; // 12 bytes
+	v3f sf           = myplayer->getSpeed() * 100; // 12 bytes
+	s32 pitch        = myplayer->getPitch() * 100; // 4 bytes
+	s32 yaw          = myplayer->getYaw() * 100; // 4 bytes
+
 	memcpy(&obs_rwd_buffer[i], &pf.X, sizeof(float));
 	memcpy(&obs_rwd_buffer[i+4], &pf.Y, sizeof(float));
 	memcpy(&obs_rwd_buffer[i+8], &pf.Z, sizeof(float));
@@ -315,6 +326,16 @@ void Client::pyConnStep(LocalPlayer *myplayer, float dtime){
 	memcpy(&obs_rwd_buffer[i+20], &sf.Z, sizeof(float));
 	memcpy(&obs_rwd_buffer[i+24], &pitch, sizeof(s32));
 	memcpy(&obs_rwd_buffer[i+28], &yaw, sizeof(s32));
+	i = i + 32;
+
+	memcpy(&obs_rwd_buffer[i], &camera_pos.X, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+4], &camera_pos.Y, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+8], &camera_pos.Z, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+12], &camera_dir.X, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+16], &camera_dir.Y, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+20], &camera_dir.Z, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+24], &fov_x, sizeof(float));
+	memcpy(&obs_rwd_buffer[i+28], &fov_y, sizeof(float));
 	i = i + 32;
 
 	// Encode the delta time
@@ -1092,7 +1113,7 @@ void Client::step(float dtime)
 		Handle environment
 	*/
 	auto begin = std::chrono::steady_clock::now();
-    pyConnStep(player, dtime);
+    pyConnStep(player, m_camera, dtime);
 	auto end = std::chrono::steady_clock::now();
 	std::chrono::duration<float> duration = end - begin;
     float seconds = duration.count();

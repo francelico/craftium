@@ -112,6 +112,7 @@ src/cmake_config_githash.h
 *.cbp
 *.layout
 *.o
+*.so
 *.a
 *.dump
 *.dmp
