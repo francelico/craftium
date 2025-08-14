@@ -13,8 +13,8 @@ voxel_radius = {
 -- names of the items included in the initial inventory
 init_inv = { "mcl_core:stone" }
 
-timeofday_step = 1 / 5000 -- day/night cycle lasts 5000 steps
-timeofday = tonumber(minetest.settings:get("world_start_time"))/24000
+-- timeofday_step = 1 / 5000 -- day/night cycle lasts 5000 steps
+-- timeofday = tonumber(minetest.settings:get("world_start_time"))/24000
 
 -- executed when the player joins the game
 minetest.register_on_joinplayer(function(player, _last_login)
@@ -39,11 +39,11 @@ end)
 -- make game's time match with learning timesteps
 minetest.register_globalstep(function(dtime)
 
-	if timeofday > 1.0 then
-		timeofday = 0.0
-	end
-	minetest.set_timeofday(timeofday)
-	timeofday = timeofday + timeofday_step
+-- 	if timeofday > 1.0 then
+-- 		timeofday = 0.0
+-- 	end
+-- 	minetest.set_timeofday(timeofday)
+-- 	timeofday = timeofday + timeofday_step
 
 	local player = minetest.get_connected_players()[1]
 
