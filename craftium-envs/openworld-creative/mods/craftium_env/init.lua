@@ -10,8 +10,14 @@ voxel_radius = {
 	z = minetest.settings:get("voxel_obs_rz")
 }
 
--- names of the items included in the initial inventory
-init_inv = { "mcl_core:stone" }
+local init_inv_string = minetest.settings:get("starting_inventory_creative")
+-- Parse into a Lua table
+init_inv = {}
+if init_inv_string then
+    for item in string.gmatch(init_inv_string, '([^,]+)') do
+        table.insert(init_inv, item)
+    end
+end
 
 timeofday = tonumber(minetest.settings:get("world_start_time"))/24000
 

@@ -134,6 +134,7 @@ void set_default_settings()
 	settings->setDefault("voxel_obs_rx", "20");
 	settings->setDefault("voxel_obs_ry", "10");
 	settings->setDefault("voxel_obs_rz", "20");
+	settings->setDefault("starting_inventory_creative", "mcl_core:stone")
 
 	// Keymap
 #if USE_SDL2
