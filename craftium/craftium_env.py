@@ -245,12 +245,16 @@ class CraftiumEnv(Env):
 
             # HACK skip some frames to let the game initialize
             # TODO This "waiting" should be implemented in Minetest not in python
-            for _ in range(self.init_frames):
+            for i in range(self.init_frames):
                 (_observation, _voxobs, _vox_center, _pos, _vel, _pitch, _yaw,
                  _cam_pos, _cam_dir, _fov_x, _fov_y,
                  _dtime, _reward, _term) = self.mt_chann.receive()
                 # making the agent look around ensures the level loads properly
-                self.mt_chann.send([0]*21, int(0.25*(self.obs_width // 2)), 0)
+                if i < (self.init_frames - 12):
+                    mouse_x = int(0.25*(self.obs_width // 2))
+                else:
+                    mouse_x = 0
+                self.mt_chann.send([0]*21, mouse_x, 0)
         else:
             self.mt_chann.send_soft_reset()
 
